@@ -31,6 +31,7 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
     private final String snowflakeStageName;
     private final String snowflakeDestPrefix;
     private final boolean deleteStageFile;
+    private final boolean deleteStage;
 
     protected static final String nullString = "\\N";
     protected static final String newLineString = "\n";
@@ -43,24 +44,19 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
     protected int batchRows;
     private long totalRows;
     private int fileCount;
-    protected SnowflakePluginTask pluginTask;
     private List<Future<Void>> uploadAndCopyFutures;
 
-    public SnowflakeCopyBatchInsert(JdbcOutputConnector connector, SnowflakePluginTask pluginTask,
-                                    String snowflakeStageName, String tmpTable, String snowflakeDestPrefix, boolean deleteStageFile) throws IOException {
+    public SnowflakeCopyBatchInsert(JdbcOutputConnector connector, String snowflakeStageName,
+                                    String tmpTable, String snowflakeDestPrefix, boolean deleteStageFile, boolean deleteStage) throws IOException {
         this.index = 0;
         openNewFile();
-        this.pluginTask = pluginTask;
         this.connector = connector;
         this.tmpTable = tmpTable;
         this.snowflakeStageName = snowflakeStageName;
         this.executorService = Executors.newCachedThreadPool();
         this.snowflakeDestPrefix = snowflakeDestPrefix;
         this.deleteStageFile = deleteStageFile;
-
-        // TODO: create stage
-        // skip header?
-        // statement.executeUpdate("create or replace stage MYSTAGE  file_format = (type = 'CSV' field_delimiter = ',' skip_header = 1)");
+        this.deleteStage = deleteStage;
     }
 
     @Override
@@ -69,7 +65,6 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
         // this.copySqlBeforeFrom = connection.buildCopySQLBeforeFrom(loadTable, insertSchema);
         // logger.info("Copy SQL: "+copySqlBeforeFrom+" ? "+COPY_AFTER_FROM);
     }
-
 
     private File createTempFile() throws IOException {
         return File.createTempFile("embulk-output-snowflake-copy-", ".tsv.tmp");  // TODO configurable temporary file path
@@ -107,6 +102,22 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
         } else {
             return (int) fsize;
         }
+    }
+
+    protected String buildCreateStageSQL(String snowflakeStageName){
+        StringBuilder sb = new StringBuilder();
+        sb.append("CREATE STAGE IF NOT EXISTS ");
+        sb.append(snowflakeStageName);
+        sb.append(";");
+        return sb.toString();
+    }
+
+    protected String buildDropStageSQL(String snowflakeStageName){
+        StringBuilder sb = new StringBuilder();
+        sb.append("DROP STAGE");
+        sb.append(snowflakeStageName);
+        sb.append(";");
+        return sb.toString();
     }
 
     public void add() throws IOException {
@@ -264,6 +275,36 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
         }
     }
 
+    @Override
+    public void finish() throws IOException, SQLException
+    {
+        SnowflakeOutputConnection con = (SnowflakeOutputConnection) connector.connect(true);
+        con.runUpdate(buildCreateStageSQL(snowflakeStageName));
+        for (Future<Void> uploadAndCopyFuture : uploadAndCopyFutures) {
+            try {
+                uploadAndCopyFuture.get();
+
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            } catch (ExecutionException e) {
+                if (e.getCause() instanceof SQLException) {
+                    throw (SQLException)e.getCause();
+                }
+                throw new RuntimeException(e);
+            }
+        }
+
+        logger.info("Loaded {} files.", fileCount);
+        con.runUpdate(buildDropStageSQL(snowflakeStageName));
+    }
+
+    @Override
+    public int[] getLastUpdateCounts()
+    {
+        // need not be implemented because SnowflakeCopyBatchInsert won't retry.
+        return new int[]{};
+    }
+
     // Escape \, \n, \t, \r
     // Remove \0
     protected String escape(char c) {
@@ -358,14 +399,15 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
         }
 
         protected String buildCopySQL(String snowflakeStageFileName){
-            // copy into mytable from '@mystage/path 1/file 1.csv';
+            // "copy into demo from @MYSTAGE/testUploadStream/ FILE_FORMAT = ( TYPE = CSV FIELD_DELIMITER = '\t' )
             StringBuilder sb = new StringBuilder();
             sb.append("COPY INTO ");
             sb.append(tmpTable);
             sb.append(" FROM ");
             sb.append(buildSnowflakeInternalStoragePath(snowflakeStageFileName));
-            // TODO: add file format option
-            sb.append(';');
+            sb.append(" FILE_FORMAT = ( TYPE = CSV FIELD_DELIMITER = '");
+            sb.append(delimiterString);
+            sb.append("');");
             return sb.toString();
         }
 

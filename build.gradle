@@ -26,29 +26,26 @@ dependencies {
     compile  "org.embulk:embulk-core:0.9.23"
     provided "org.embulk:embulk-core:0.9.23"
     // compile "YOUR_JAR_DEPENDENCY_GROUP:YOUR_JAR_DEPENDENCY_MODULE:YOUR_JAR_DEPENDENCY_VERSION"
-    compile  "org.embulk.output.jdbc:embulk-output-jdbc:0.8.7"
-    compile group: 'net.snowflake', name: 'snowflake-jdbc', version: '3.12.8'
-
-    defaultJdbcDriver "net.snowflake:snowflake-jdbc:3.12.8"
+    compile "org.embulk.output.jdbc:embulk-output-jdbc:0.8.7"
+    compile "net.snowflake:snowflake-jdbc:3.12.8"
+    // defaultJdbcDriver "net.snowflake:snowflake-jdbc:3.12.8"
 
     testCompile "junit:junit:4.+"
 }
 
 task classpath(type: Copy, dependsOn: ["jar"]) {
-    doFirst { file("classpath").deleteDir() }
+    doFirst { file('classpath').deleteDir() }
     from (configurations.runtime - configurations.provided - configurations.defaultJdbcDriver + files(jar.archivePath))
-    into "classpath"
+    into 'classpath'
 }
-
 task defaultJdbcDriver(type: Copy, dependsOn: ["jar"]) {
     doFirst { file('default_jdbc_driver').deleteDir() }
     from (configurations.defaultJdbcDriver)
     into 'default_jdbc_driver'
 }
-
 clean {
-    delete "classpath"
-    delete "default_jdbc_driver"
+    delete 'classpath'
+    delete 'default_jdbc_driver'
 }
 
 checkstyle {
@@ -68,7 +65,7 @@ task checkstyle(type: Checkstyle) {
     source = sourceSets.main.allJava + sourceSets.test.allJava
 }
 
-task gem(type: JRubyExec, dependsOn: ["gemspec", "classpath", "defaultJdbcDriver"]) {
+task gem(type: JRubyExec, dependsOn: ["gemspec", "classpath", 'defaultJdbcDriver']) {
     jrubyArgs "-S"
     script "gem"
     scriptArgs "build", "${project.name}.gemspec"
@@ -103,7 +100,7 @@ Gem::Specification.new do |spec|
   spec.licenses      = ["MIT"]
   spec.homepage      = "https://github.com/trocco-io/embulk-output-snowflake"
 
-  spec.files         = `git ls-files`.split("\n") + Dir["classpath/*.jar"]
+  spec.files         = `git ls-files`.split("\n") + Dir["classpath/*.jar"] + Dir["default_jdbc_driver/*.jar"]
   spec.test_files    = spec.files.grep(%r"^(test|spec)/")
   spec.require_paths = ["lib"]
 

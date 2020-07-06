@@ -1,5 +1,6 @@
 package org.embulk.output.snowflake;
 
+import com.google.inject.Stage;
 import org.embulk.output.jdbc.BatchInsert;
 import org.embulk.output.jdbc.JdbcOutputConnector;
 import org.embulk.output.jdbc.JdbcSchema;
@@ -13,23 +14,20 @@ import java.math.BigDecimal;
 import java.nio.charset.Charset;
 import java.sql.Connection;
 import java.sql.SQLException;
-import java.util.Calendar;
-import java.util.List;
-import java.util.Locale;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.*;
 import java.util.zip.GZIPOutputStream;
 
 import net.snowflake.client.jdbc.SnowflakeConnection;
+import org.slf4j.LoggerFactory;
 
 public class SnowflakeCopyBatchInsert implements BatchInsert {
-    private final Logger logger = Exec.getLogger(SnowflakeCopyBatchInsert.class);
+    private final Logger logger = LoggerFactory.getLogger(SnowflakeCopyBatchInsert.class);
     private final JdbcOutputConnector connector;
     protected static final Charset FILE_CHARSET = Charset.forName("UTF-8");
     private final ExecutorService executorService;
-    private final String tmpTable;
-    private final String snowflakeStageName;
-    private final String snowflakeDestPrefix;
+    private final TableIdentifier tableIdentifier;
+    private final StageIdentifier stageIdentifier;
     private final boolean deleteStageFile;
     private final boolean deleteStage;
 
@@ -46,17 +44,17 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
     private int fileCount;
     private List<Future<Void>> uploadAndCopyFutures;
 
-    public SnowflakeCopyBatchInsert(JdbcOutputConnector connector, String snowflakeStageName,
-                                    String tmpTable, String snowflakeDestPrefix, boolean deleteStageFile, boolean deleteStage) throws IOException {
+    public SnowflakeCopyBatchInsert(JdbcOutputConnector connector, TableIdentifier tableIdentifier, StageIdentifier stageIdentifier,
+                                    boolean deleteStageFile, boolean deleteStage) throws IOException {
         this.index = 0;
         openNewFile();
         this.connector = connector;
-        this.tmpTable = tmpTable;
-        this.snowflakeStageName = snowflakeStageName;
+        this.tableIdentifier = tableIdentifier;
+        this.stageIdentifier = stageIdentifier;
         this.executorService = Executors.newCachedThreadPool();
-        this.snowflakeDestPrefix = snowflakeDestPrefix;
         this.deleteStageFile = deleteStageFile;
         this.deleteStage = deleteStage;
+        this.uploadAndCopyFutures = new ArrayList();
     }
 
     @Override
@@ -64,6 +62,7 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
         this.connection = (SnowflakeOutputConnection) connector.connect(true);
         // this.copySqlBeforeFrom = connection.buildCopySQLBeforeFrom(loadTable, insertSchema);
         // logger.info("Copy SQL: "+copySqlBeforeFrom+" ? "+COPY_AFTER_FROM);
+        this.connection.runCreateStage(stageIdentifier);
     }
 
     private File createTempFile() throws IOException {
@@ -102,22 +101,6 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
         } else {
             return (int) fsize;
         }
-    }
-
-    protected String buildCreateStageSQL(String snowflakeStageName){
-        StringBuilder sb = new StringBuilder();
-        sb.append("CREATE STAGE IF NOT EXISTS ");
-        sb.append(snowflakeStageName);
-        sb.append(";");
-        return sb.toString();
-    }
-
-    protected String buildDropStageSQL(String snowflakeStageName){
-        StringBuilder sb = new StringBuilder();
-        sb.append("DROP STAGE");
-        sb.append(snowflakeStageName);
-        sb.append(";");
-        return sb.toString();
     }
 
     public void add() throws IOException {
@@ -246,8 +229,9 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
     public void flush() throws IOException, SQLException {
         File file = closeCurrentFile();  // flush buffered data in writer
 
-        String snowflakeStageFileName = UUID.randomUUID().toString();
-        UploadTask uploadTask = new UploadTask(file, batchRows, snowflakeStageFileName);
+        String snowflakeStageFileName = "embulk_snowflake_" + SnowflakeUtils.randomString(8);
+
+        UploadTask uploadTask = new UploadTask(file, batchRows, stageIdentifier, snowflakeStageFileName);
         Future<Void> uploadFuture = executorService.submit(uploadTask);
         uploadAndCopyFutures.add(uploadFuture);
 
@@ -278,8 +262,6 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
     @Override
     public void finish() throws IOException, SQLException
     {
-        SnowflakeOutputConnection con = (SnowflakeOutputConnection) connector.connect(true);
-        con.runUpdate(buildCreateStageSQL(snowflakeStageName));
         for (Future<Void> uploadAndCopyFuture : uploadAndCopyFutures) {
             try {
                 uploadAndCopyFuture.get();
@@ -295,7 +277,7 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
         }
 
         logger.info("Loaded {} files.", fileCount);
-        con.runUpdate(buildDropStageSQL(snowflakeStageName));
+        this.connection.runDropStage(stageIdentifier);
     }
 
     @Override
@@ -328,11 +310,13 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
         private final File file;
         private final int batchRows;
         private final String snowflakeStageFileName;
+        private final StageIdentifier stageIdentifier;
 
-        public UploadTask(File file, int batchRows, String snowflakeStageFileName) {
+        public UploadTask(File file, int batchRows, StageIdentifier stageIdentifier, String snowflakeStageFileName) {
             this.file = file;
             this.batchRows = batchRows;
             this.snowflakeStageFileName = snowflakeStageFileName;
+            this.stageIdentifier = stageIdentifier;
         }
 
         public Void call() throws IOException, SQLException {
@@ -343,11 +327,9 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
                 long startTime = System.currentTimeMillis();
                 // put file to snowflake internal storage
                 SnowflakeOutputConnection con = (SnowflakeOutputConnection) connector.connect(true);
-                Connection connection = con.getConnection();
 
                 FileInputStream fileInputStream = new FileInputStream(file);
-                connection.unwrap(SnowflakeConnection.class).uploadStream(snowflakeStageName, snowflakeDestPrefix,
-                        fileInputStream, this.snowflakeStageFileName + ".csv.gz", false);
+                con.runUploadFile(stageIdentifier, snowflakeStageFileName, fileInputStream);
 
                 double seconds = (System.currentTimeMillis() - startTime) / 1000.0;
 
@@ -379,8 +361,7 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
                     logger.info("Running COPY from file {}", snowflakeStageFileName);
 
                     long startTime = System.currentTimeMillis();
-
-                    con.runCopy(buildCopySQL(snowflakeStageFileName));
+                    con.runCopy(tableIdentifier, stageIdentifier, snowflakeStageFileName, delimiterString);
 
                     double seconds = (System.currentTimeMillis() - startTime) / 1000.0;
 
@@ -391,44 +372,11 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
                 }
             } finally {
                 if (deleteStageFile) {
-                    connection.runUpdate(buildDeleteStageFileSQL(snowflakeStageFileName));
+                    connection.runDeleteStageFile(stageIdentifier, snowflakeStageFileName);
                 }
             }
 
             return null;
-        }
-
-        protected String buildCopySQL(String snowflakeStageFileName){
-            // "copy into demo from @MYSTAGE/testUploadStream/ FILE_FORMAT = ( TYPE = CSV FIELD_DELIMITER = '\t' )
-            StringBuilder sb = new StringBuilder();
-            sb.append("COPY INTO ");
-            sb.append(tmpTable);
-            sb.append(" FROM ");
-            sb.append(buildSnowflakeInternalStoragePath(snowflakeStageFileName));
-            sb.append(" FILE_FORMAT = ( TYPE = CSV FIELD_DELIMITER = '");
-            sb.append(delimiterString);
-            sb.append("');");
-            return sb.toString();
-        }
-
-        protected String buildDeleteStageFileSQL(String snowflakeStageFileName){
-            StringBuilder sb = new StringBuilder();
-            sb.append("REMOVE ");
-            sb.append(buildSnowflakeInternalStoragePath(snowflakeStageFileName));
-            sb.append(';');
-            return sb.toString();
-        }
-
-        protected String buildSnowflakeInternalStoragePath(String snowflakeStageFileName){
-            StringBuilder sb = new StringBuilder();
-            sb.append("@");
-            sb.append(snowflakeStageName);
-            sb.append("/");
-            sb.append(snowflakeDestPrefix);
-            sb.append("/");
-            sb.append(snowflakeStageFileName);
-            sb.append(".csv.gz");
-            return sb.toString();
         }
     }
 }

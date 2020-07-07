@@ -1,24 +1,19 @@
 package org.embulk.output.snowflake;
 
-import com.google.inject.Stage;
 import org.embulk.output.jdbc.BatchInsert;
 import org.embulk.output.jdbc.JdbcOutputConnector;
 import org.embulk.output.jdbc.JdbcSchema;
 import org.embulk.output.jdbc.TableIdentifier;
-import org.embulk.spi.Exec;
 import org.embulk.spi.time.Timestamp;
 import org.slf4j.Logger;
 
 import java.io.*;
 import java.math.BigDecimal;
 import java.nio.charset.Charset;
-import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.zip.GZIPOutputStream;
-
-import net.snowflake.client.jdbc.SnowflakeConnection;
 import org.slf4j.LoggerFactory;
 
 public class SnowflakeCopyBatchInsert implements BatchInsert {
@@ -29,7 +24,6 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
     private final TableIdentifier tableIdentifier;
     private final StageIdentifier stageIdentifier;
     private final boolean deleteStageFile;
-    private final boolean deleteStage;
 
     protected static final String nullString = "\\N";
     protected static final String newLineString = "\n";
@@ -45,7 +39,7 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
     private List<Future<Void>> uploadAndCopyFutures;
 
     public SnowflakeCopyBatchInsert(JdbcOutputConnector connector, TableIdentifier tableIdentifier, StageIdentifier stageIdentifier,
-                                    boolean deleteStageFile, boolean deleteStage) throws IOException {
+                                    boolean deleteStageFile) throws IOException {
         this.index = 0;
         openNewFile();
         this.connector = connector;
@@ -53,15 +47,12 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
         this.stageIdentifier = stageIdentifier;
         this.executorService = Executors.newCachedThreadPool();
         this.deleteStageFile = deleteStageFile;
-        this.deleteStage = deleteStage;
         this.uploadAndCopyFutures = new ArrayList();
     }
 
     @Override
     public void prepare(TableIdentifier loadTable, JdbcSchema insertSchema) throws SQLException {
         this.connection = (SnowflakeOutputConnection) connector.connect(true);
-        // this.copySqlBeforeFrom = connection.buildCopySQLBeforeFrom(loadTable, insertSchema);
-        // logger.info("Copy SQL: "+copySqlBeforeFrom+" ? "+COPY_AFTER_FROM);
         this.connection.runCreateStage(stageIdentifier);
     }
 
@@ -247,6 +238,7 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
 
     public void close() throws IOException, SQLException {
         executorService.shutdownNow();
+
         try {
             executorService.awaitTermination(60, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
@@ -277,7 +269,6 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
         }
 
         logger.info("Loaded {} files.", fileCount);
-        this.connection.runDropStage(stageIdentifier);
     }
 
     @Override

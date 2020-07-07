@@ -1,15 +1,10 @@
 package org.embulk.output.snowflake;
 
-import com.google.inject.Stage;
 import net.snowflake.client.jdbc.SnowflakeConnection;
-import net.snowflake.client.jdbc.SnowflakeSQLException;
-import net.snowflake.client.jdbc.SnowflakeType;
 import org.embulk.output.jdbc.JdbcColumn;
 import org.embulk.output.jdbc.JdbcOutputConnection;
 import org.embulk.output.jdbc.TableIdentifier;
-import org.jruby.RubyProcess;
 
-import javax.swing.text.html.HTMLDocument;
 import java.io.FileInputStream;
 import java.sql.Connection;
 import java.sql.SQLException;

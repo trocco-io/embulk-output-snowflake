@@ -1,6 +1,6 @@
 plugins {
-    id "com.jfrog.bintray" version "1.1"
-    id "com.github.jruby-gradle.base" version "1.5.0"
+    id 'com.jfrog.bintray' version '1.8.4'
+    id "com.github.jruby-gradle.base" version "1.6.0"
     id "java"
     id "checkstyle"
 }
@@ -8,12 +8,16 @@ import com.github.jrubygradle.JRubyExec
 repositories {
     mavenCentral()
     jcenter()
+    maven {
+        url "https://dl.bintray.com/embulk-output-jdbc/maven"
+    }
 }
 configurations {
     provided
+    defaultJdbcDriver
 }
 
-version = "0.1.0"
+version = "0.0.1"
 
 sourceCompatibility = 1.8
 targetCompatibility = 1.8
@@ -22,15 +26,27 @@ dependencies {
     compile  "org.embulk:embulk-core:0.9.23"
     provided "org.embulk:embulk-core:0.9.23"
     // compile "YOUR_JAR_DEPENDENCY_GROUP:YOUR_JAR_DEPENDENCY_MODULE:YOUR_JAR_DEPENDENCY_VERSION"
+    compile "org.embulk.output.jdbc:embulk-output-jdbc:0.8.7"
+    compile "net.snowflake:snowflake-jdbc:3.12.8"
+    defaultJdbcDriver "net.snowflake:snowflake-jdbc:3.12.8"
+
     testCompile "junit:junit:4.+"
 }
 
 task classpath(type: Copy, dependsOn: ["jar"]) {
-    doFirst { file("classpath").deleteDir() }
-    from (configurations.runtime - configurations.provided + files(jar.archivePath))
-    into "classpath"
+    doFirst { file('classpath').deleteDir() }
+    from (configurations.runtime - configurations.provided - configurations.defaultJdbcDriver + files(jar.archivePath))
+    into 'classpath'
 }
-clean { delete "classpath" }
+task defaultJdbcDriver(type: Copy, dependsOn: ["jar"]) {
+    doFirst { file('default_jdbc_driver').deleteDir() }
+    from (configurations.defaultJdbcDriver)
+    into 'default_jdbc_driver'
+}
+clean {
+    delete 'classpath'
+    delete 'default_jdbc_driver'
+}
 
 checkstyle {
     configFile = file("${project.rootDir}/config/checkstyle/checkstyle.xml")
@@ -49,7 +65,7 @@ task checkstyle(type: Checkstyle) {
     source = sourceSets.main.allJava + sourceSets.test.allJava
 }
 
-task gem(type: JRubyExec, dependsOn: ["gemspec", "classpath"]) {
+task gem(type: JRubyExec, dependsOn: ["gemspec", "classpath", 'defaultJdbcDriver']) {
     jrubyArgs "-S"
     script "gem"
     scriptArgs "build", "${project.name}.gemspec"
@@ -82,9 +98,9 @@ Gem::Specification.new do |spec|
   spec.description   = %[Dumps records to Snowflake.]
   spec.email         = ["ugw.gi.world@gmail.com"]
   spec.licenses      = ["MIT"]
-  # TODO set this: spec.homepage      = "https://github.com/ugw.gi.world/embulk-output-snowflake"
+  spec.homepage      = "https://github.com/trocco-io/embulk-output-snowflake"
 
-  spec.files         = `git ls-files`.split("\n") + Dir["classpath/*.jar"]
+  spec.files         = `git ls-files`.split("\n") + Dir["classpath/*.jar"] + Dir["default_jdbc_driver/*.jar"]
   spec.test_files    = spec.files.grep(%r"^(test|spec)/")
   spec.require_paths = ["lib"]
 

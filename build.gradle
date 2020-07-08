@@ -28,7 +28,7 @@ dependencies {
     // compile "YOUR_JAR_DEPENDENCY_GROUP:YOUR_JAR_DEPENDENCY_MODULE:YOUR_JAR_DEPENDENCY_VERSION"
     compile "org.embulk.output.jdbc:embulk-output-jdbc:0.8.7"
     compile "net.snowflake:snowflake-jdbc:3.12.8"
-    // defaultJdbcDriver "net.snowflake:snowflake-jdbc:3.12.8"
+    defaultJdbcDriver "net.snowflake:snowflake-jdbc:3.12.8"
 
     testCompile "junit:junit:4.+"
 }

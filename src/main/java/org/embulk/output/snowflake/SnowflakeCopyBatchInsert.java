@@ -170,7 +170,7 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
     public void setSqlDate(Timestamp v, Calendar cal) throws IOException {
         appendDelimiter();
         cal.setTimeInMillis(v.getEpochSecond() * 1000);
-        String f = String.format(Locale.ENGLISH, "%02d-%02d-%02d",
+        String f = String.format(Locale.ENGLISH, "%04d-%02d-%02d",
                 cal.get(Calendar.YEAR),
                 cal.get(Calendar.MONTH) + 1,
                 cal.get(Calendar.DAY_OF_MONTH));

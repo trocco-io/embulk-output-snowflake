@@ -20,18 +20,15 @@ public class SnowflakeOutputConnection extends JdbcOutputConnection {
     public void runCopy(TableIdentifier tableIdentifier, StageIdentifier stageIdentifier, String filename, String delimiterString) throws SQLException
     {
         String sql = buildCopySQL(tableIdentifier, stageIdentifier, filename, delimiterString);
-        System.out.println(sql);
         runUpdate(sql);
     }
     public void runCreateStage(StageIdentifier stageIdentifier) throws SQLException {
         String sql = buildCreateStageSQL(stageIdentifier);
-        System.out.println(sql);
         runUpdate(sql);
     }
 
     public void runDropStage(StageIdentifier stageIdentifier) throws SQLException {
         String sql = buildDropStageSQL(stageIdentifier);
-        System.out.println(sql);
         runUpdate(sql);
     }
 
@@ -42,7 +39,6 @@ public class SnowflakeOutputConnection extends JdbcOutputConnection {
 
     public void runDeleteStageFile(StageIdentifier stageIdentifier, String filename) throws SQLException{
         String sql = buildDeleteStageFileSQL(stageIdentifier, filename);
-        System.out.println(sql);
         runUpdate(sql);
     }
 

@@ -131,8 +131,12 @@ public class SnowflakeOutputPlugin
             this.stageIdentifier = StageIdentifierHolder.getStageIdentifier(t);
             snowflakeCon.runCreateStage(this.stageIdentifier);
         }
-        String tmpTable = t.getIntermediateTables().get().get(0).getTableName();
-        TableIdentifier tableIdentifier = new TableIdentifier(t.getDatabase(), t.getSchema(), tmpTable);
+
+        String targetTable = t.getTable();
+        if (t.getIntermediateTables().isPresent()){
+            targetTable = t.getIntermediateTables().get().get(0).getTableName();
+        }
+        TableIdentifier tableIdentifier = new TableIdentifier(t.getDatabase(), t.getSchema(), targetTable);
 
         return new SnowflakeCopyBatchInsert(getConnector(task, true),
                 tableIdentifier, this.stageIdentifier,false);

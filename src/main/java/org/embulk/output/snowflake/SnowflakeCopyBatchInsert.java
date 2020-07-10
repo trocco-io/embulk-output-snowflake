@@ -21,7 +21,6 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
     private final JdbcOutputConnector connector;
     protected static final Charset FILE_CHARSET = Charset.forName("UTF-8");
     private final ExecutorService executorService;
-    private final TableIdentifier tableIdentifier;
     private final StageIdentifier stageIdentifier;
     private final boolean deleteStageFile;
 
@@ -30,6 +29,7 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
     protected static final String delimiterString = "\t";
 
     private SnowflakeOutputConnection connection = null;
+    private TableIdentifier tableIdentifier = null;
     protected File currentFile;
     protected BufferedWriter writer;
     protected int index;
@@ -38,12 +38,11 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
     private int fileCount;
     private List<Future<Void>> uploadAndCopyFutures;
 
-    public SnowflakeCopyBatchInsert(JdbcOutputConnector connector, TableIdentifier tableIdentifier, StageIdentifier stageIdentifier,
+    public SnowflakeCopyBatchInsert(JdbcOutputConnector connector, StageIdentifier stageIdentifier,
                                     boolean deleteStageFile) throws IOException {
         this.index = 0;
         openNewFile();
         this.connector = connector;
-        this.tableIdentifier = tableIdentifier;
         this.stageIdentifier = stageIdentifier;
         this.executorService = Executors.newCachedThreadPool();
         this.deleteStageFile = deleteStageFile;
@@ -54,6 +53,7 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
     public void prepare(TableIdentifier loadTable, JdbcSchema insertSchema) throws SQLException {
         this.connection = (SnowflakeOutputConnection) connector.connect(true);
         this.connection.runCreateStage(stageIdentifier);
+        this.tableIdentifier = loadTable;
     }
 
     private File createTempFile() throws IOException {

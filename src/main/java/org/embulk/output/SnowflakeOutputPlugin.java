@@ -121,7 +121,7 @@ public class SnowflakeOutputPlugin
     protected BatchInsert newBatchInsert(PluginTask task, Optional<MergeConfig> mergeConfig) throws IOException, SQLException
     {
         if (mergeConfig.isPresent()) {
-            throw new UnsupportedOperationException("Snowflake output plugin doesn't support 'merge_direct' mode. Use 'merge' mode instead.");
+            throw new UnsupportedOperationException("Snowflake output plugin doesn't support 'merge_direct' mode.");
         }
 
         SnowflakePluginTask t = (SnowflakePluginTask) task;
@@ -132,13 +132,6 @@ public class SnowflakeOutputPlugin
             snowflakeCon.runCreateStage(this.stageIdentifier);
         }
 
-        String targetTable = t.getTable();
-        if (t.getIntermediateTables().isPresent()){
-            targetTable = t.getIntermediateTables().get().get(0).getTableName();
-        }
-        TableIdentifier tableIdentifier = new TableIdentifier(t.getDatabase(), t.getSchema(), targetTable);
-
-        return new SnowflakeCopyBatchInsert(getConnector(task, true),
-                tableIdentifier, this.stageIdentifier,false);
+        return new SnowflakeCopyBatchInsert(getConnector(task, true), this.stageIdentifier,false);
     }
 }

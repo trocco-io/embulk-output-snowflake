@@ -43,6 +43,10 @@ public class SnowflakeOutputPlugin
         @ConfigDefault("\"public\"")
         public String getSchema();
 
+        @Config("role")
+        @ConfigDefault("\"PUBLIC\"")
+        public String getRole();
+
         @Config("delete_stage")
         @ConfigDefault("false")
         public boolean getDeleteStage();
@@ -77,6 +81,7 @@ public class SnowflakeOutputPlugin
         props.setProperty("warehouse", t.getWarehouse());
         props.setProperty("db", t.getDatabase());
         props.setProperty("schema", t.getSchema());
+        props.setProperty("role", t.getRole());
 
         props.putAll(t.getOptions());
 

@@ -33,7 +33,7 @@ public class SnowflakeOutputConnection extends JdbcOutputConnection {
     }
 
     public void runUploadFile(StageIdentifier stageIdentifier, String filename ,FileInputStream fileInputStream) throws SQLException{
-        connection.unwrap(SnowflakeConnection.class).uploadStream(stageIdentifier.getStageName(), stageIdentifier.getDestPrefix().or("/"),
+        connection.unwrap(SnowflakeConnection.class).uploadStream(stageIdentifier.getStageName(), stageIdentifier.getDestPrefix().orElse("/"),
                 fileInputStream, filename + ".csv.gz", false);
     }
 
@@ -118,5 +118,19 @@ public class SnowflakeOutputConnection extends JdbcOutputConnection {
         sb.append(snowflakeStageFileName);
         sb.append(".csv.gz");
         return sb.toString();
+    }
+
+    // this code is borrowed from jdbc-output to change table name
+    public void executeSql(String sql) throws SQLException
+    {
+        Statement stmt = connection.createStatement();
+        try {
+            executeUpdate(stmt, sql);
+            commitIfNecessary(connection);
+        } catch (SQLException ex) {
+            throw safeRollback(connection, ex);
+        } finally {
+            stmt.close();
+        }
     }
 }

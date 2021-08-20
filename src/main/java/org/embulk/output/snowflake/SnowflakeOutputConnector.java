@@ -1,18 +1,13 @@
 package org.embulk.output.snowflake;
 
-import com.google.common.base.Optional;
-import net.snowflake.client.jdbc.SnowflakeSQLException;
-import net.snowflake.client.jdbc.SnowflakeType;
 import org.embulk.output.jdbc.AbstractJdbcOutputConnector;
-import org.embulk.output.jdbc.JdbcColumn;
 import org.embulk.output.jdbc.JdbcOutputConnection;
 import org.embulk.output.jdbc.TransactionIsolation;
 
 import java.sql.Connection;
-import java.sql.Driver;
 import java.sql.DriverManager;
 import java.sql.SQLException;
-import java.util.Enumeration;
+import java.util.Optional;
 import java.util.Properties;
 
 public class SnowflakeOutputConnector extends AbstractJdbcOutputConnector

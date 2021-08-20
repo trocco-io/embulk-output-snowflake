@@ -1,10 +1,10 @@
 package org.embulk.output.snowflake;
 
-import com.google.common.base.Optional;
 import org.embulk.output.SnowflakeOutputPlugin;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.Optional;
 
 public class StageIdentifierHolder {
     private static final String pattern = "yyyyMMdd";

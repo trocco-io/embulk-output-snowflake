@@ -1,7 +1,8 @@
 package org.embulk.output.snowflake;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.google.common.base.Optional;
+
+import java.util.Optional;
 
 public class StageIdentifier {
     private String database;

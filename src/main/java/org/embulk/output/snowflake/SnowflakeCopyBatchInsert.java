@@ -11,6 +11,7 @@ import java.io.*;
 import java.math.BigDecimal;
 import java.nio.charset.Charset;
 import java.sql.SQLException;
+import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.zip.GZIPOutputStream;
@@ -167,17 +168,22 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
         setEscapedString(String.valueOf(v));
     }
 
-    public void setSqlDate(Timestamp v, Calendar cal) throws IOException {
+
+    @Override
+    public void setSqlDate(final Instant v, final Calendar cal) throws IOException
+    {
         appendDelimiter();
         cal.setTimeInMillis(v.getEpochSecond() * 1000);
-        String f = String.format(Locale.ENGLISH, "%04d-%02d-%02d",
+        String f = String.format(Locale.ENGLISH, "%02d-%02d-%02d",
                 cal.get(Calendar.YEAR),
                 cal.get(Calendar.MONTH) + 1,
                 cal.get(Calendar.DAY_OF_MONTH));
         writer.write(f);
     }
 
-    public void setSqlTime(Timestamp v, Calendar cal) throws IOException {
+    @Override
+    public void setSqlTime(final Instant v, final Calendar cal) throws IOException
+    {
         appendDelimiter();
         cal.setTimeInMillis(v.getEpochSecond() * 1000);
         String f = String.format(Locale.ENGLISH, "%02d:%02d:%02d.%06d",
@@ -188,7 +194,9 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
         writer.write(f);
     }
 
-    public void setSqlTimestamp(Timestamp v, Calendar cal) throws IOException {
+    @Override
+    public void setSqlTimestamp(final Instant v, final Calendar cal) throws IOException
+    {
         appendDelimiter();
         cal.setTimeInMillis(v.getEpochSecond() * 1000);
         int zoneOffset = cal.get(Calendar.ZONE_OFFSET) / 1000 / 60;  // zone offset considering DST in minute

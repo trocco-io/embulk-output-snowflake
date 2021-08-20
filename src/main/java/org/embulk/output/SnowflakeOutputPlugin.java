@@ -279,7 +279,7 @@ public class SnowflakeOutputPlugin
                                 task.getFeatures().getMaxTableNameLength(), task.getFeatures().getTableNameLengthSemantics());
                         for (int taskIndex = 0; taskIndex < taskCount; taskIndex++) {
                             // changed
-                            String tableName = namePrefix + String.format("%03d", taskIndex % 10000);
+                            String tableName = namePrefix + String.format("%04d", taskIndex % 10000);
                             table = buildIntermediateTableId(con, task, tableName);
                             // if table already exists, SQLException will be thrown
                             con.createTable(table, newTableSchema, task.getCreateTableConstraint(), task.getCreateTableOption());

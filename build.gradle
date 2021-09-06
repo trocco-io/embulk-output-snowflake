@@ -1,23 +1,16 @@
 plugins {
-    id 'com.jfrog.bintray' version '1.8.4'
-    id "com.github.jruby-gradle.base" version "1.6.0"
     id "java"
     id "checkstyle"
+    id "maven-publish"
+    id "org.embulk.embulk-plugins" version "0.4.2"
 }
-import com.github.jrubygradle.JRubyExec
 repositories {
     mavenCentral()
-    jcenter()
-    maven {
-        url "https://dl.bintray.com/embulk-output-jdbc/maven"
-    }
-}
-configurations {
-    provided
-    defaultJdbcDriver
 }
 
-version = "0.3.0"
+group = "io.trocco"
+version = "0.3.1"
+description = "Dumps records to Snowflake."
 
 sourceCompatibility = 1.8
 targetCompatibility = 1.8
@@ -47,31 +40,46 @@ dependencies {
     compile("org.embulk:embulk-util-json:0.1.0") {
         exclude group: "org.msgpack", module: "msgpack-core"  // Included in embulk-api.
     }
-    testCompile "junit:junit:4.+"
-    testCompile "org.embulk:embulk-junit4:0.10.31"
-    testCompile "org.embulk:embulk-core:0.10.31"
-    testCompile "org.embulk:embulk-deps:0.10.31"
+    testImplementation "junit:junit:4.+"
+    testImplementation "org.embulk:embulk-junit4:0.10.31"
+    testImplementation "org.embulk:embulk-core:0.10.31"
+    testImplementation "org.embulk:embulk-deps:0.10.31"
 
     compile "org.embulk:embulk-output-jdbc:0.10.1"
     compile "net.snowflake:snowflake-jdbc:3.13.5"
-    defaultJdbcDriver "net.snowflake:snowflake-jdbc:3.13.5"
 }
-
-task classpath(type: Copy, dependsOn: ["jar"]) {
-    doFirst { file('classpath').deleteDir() }
-    from (configurations.runtime - configurations.provided - configurations.defaultJdbcDriver + files(jar.archivePath))
-    into 'classpath'
+embulkPlugin {
+    mainClass = "org.embulk.output.snowflake.SnowflakeOutputPlugin"
+    category = "output"
+    type = "snowflake"
 }
-task defaultJdbcDriver(type: Copy, dependsOn: ["jar"]) {
-    doFirst { file('default_jdbc_driver').deleteDir() }
-    from (configurations.defaultJdbcDriver)
-    into 'default_jdbc_driver'
+// This Gradle plugin's POM dependency modification works for "maven-publish" tasks.
+//
+// Note that "uploadArchives" is no longer supported. It is deprecated in Gradle 6 to be removed in Gradle 7.
+// https://github.com/gradle/gradle/issues/3003#issuecomment-495025844
+publishing {
+    publications {
+        embulkPluginMaven(MavenPublication) {  // Publish it with "publishEmbulkPluginMavenPublicationToMavenRepository".
+            from components.java  // Must be "components.java". The dependency modification works only for it.
+        }
+    }
+    repositories {
+        maven {
+            url = "${project.buildDir}/mavenPublishLocal"
+        }
+    }
 }
-clean {
-    delete 'classpath'
-    delete 'default_jdbc_driver'
+gem {
+    from("LICENSE.txt")
+    authors = [ "giwa" ]
+    email = [ "ugw.gi.world@gmail.com" ]
+    summary = "Snowflake output plugin for Embulk"
+    homepage = "https://github.com/trocco-io/embulk-output-snowflake"
+    licenses = [ "MIT" ]
 }
-
+gemPush {
+    host = "https://rubygems.org"
+}
 checkstyle {
     configFile = file("${project.rootDir}/config/checkstyle/checkstyle.xml")
     toolVersion = '6.14.1'
@@ -88,51 +96,3 @@ task checkstyle(type: Checkstyle) {
     classpath = sourceSets.main.output + sourceSets.test.output
     source = sourceSets.main.allJava + sourceSets.test.allJava
 }
-
-task gem(type: JRubyExec, dependsOn: ["gemspec", "classpath", 'defaultJdbcDriver']) {
-    jrubyArgs "-S"
-    script "gem"
-    scriptArgs "build", "${project.name}.gemspec"
-    doLast { ant.move(file: "${project.name}-${project.version}.gem", todir: "pkg") }
-}
-
-task gemPush(type: JRubyExec, dependsOn: ["gem"]) {
-    jrubyArgs "-S"
-    script "gem"
-    scriptArgs "push", "pkg/${project.name}-${project.version}.gem"
-}
-
-task "package"(dependsOn: ["gemspec", "classpath"]) {
-    doLast {
-        println "> Build succeeded."
-        println "> You can run embulk with '-L ${file(".").absolutePath}' argument."
-    }
-}
-
-task gemspec {
-    ext.gemspecFile = file("${project.name}.gemspec")
-    inputs.file "build.gradle"
-    outputs.file gemspecFile
-    doLast { gemspecFile.write($/
-Gem::Specification.new do |spec|
-  spec.name          = "${project.name}"
-  spec.version       = "${project.version}"
-  spec.authors       = ["giwa"]
-  spec.summary       = %[Snowflake output plugin for Embulk]
-  spec.description   = %[Dumps records to Snowflake.]
-  spec.email         = ["ugw.gi.world@gmail.com"]
-  spec.licenses      = ["MIT"]
-  spec.homepage      = "https://github.com/trocco-io/embulk-output-snowflake"
-
-  spec.files         = `git ls-files`.split("\n") + Dir["classpath/*.jar"] + Dir["default_jdbc_driver/*.jar"]
-  spec.test_files    = spec.files.grep(%r"^(test|spec)/")
-  spec.require_paths = ["lib"]
-
-  #spec.add_dependency 'YOUR_GEM_DEPENDENCY', ['~> YOUR_GEM_DEPENDENCY_VERSION']
-  spec.add_development_dependency 'bundler', ['~> 1.0']
-  spec.add_development_dependency 'rake', ['~> 12.0']
-end
-/$)
-    }
-}
-clean { delete "${project.name}.gemspec" }

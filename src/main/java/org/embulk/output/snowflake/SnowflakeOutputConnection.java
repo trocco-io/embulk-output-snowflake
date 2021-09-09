@@ -1,136 +1,150 @@
 package org.embulk.output.snowflake;
 
+import java.io.FileInputStream;
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.sql.Statement;
 import net.snowflake.client.jdbc.SnowflakeConnection;
 import org.embulk.output.jdbc.JdbcColumn;
 import org.embulk.output.jdbc.JdbcOutputConnection;
 import org.embulk.output.jdbc.TableIdentifier;
 
-import java.io.FileInputStream;
-import java.sql.Connection;
-import java.sql.SQLException;
-import java.sql.Statement;
-
 public class SnowflakeOutputConnection extends JdbcOutputConnection {
-    public SnowflakeOutputConnection(Connection connection)
-            throws SQLException
-    {
-        super(connection, null);
-    }
+  public SnowflakeOutputConnection(Connection connection) throws SQLException {
+    super(connection, null);
+  }
 
-    public void runCopy(TableIdentifier tableIdentifier, StageIdentifier stageIdentifier, String filename, String delimiterString) throws SQLException
-    {
-        String sql = buildCopySQL(tableIdentifier, stageIdentifier, filename, delimiterString);
-        runUpdate(sql);
-    }
-    public void runCreateStage(StageIdentifier stageIdentifier) throws SQLException {
-        String sql = buildCreateStageSQL(stageIdentifier);
-        runUpdate(sql);
-    }
+  public void runCopy(
+      TableIdentifier tableIdentifier,
+      StageIdentifier stageIdentifier,
+      String filename,
+      String delimiterString)
+      throws SQLException {
+    String sql = buildCopySQL(tableIdentifier, stageIdentifier, filename, delimiterString);
+    runUpdate(sql);
+  }
 
-    public void runDropStage(StageIdentifier stageIdentifier) throws SQLException {
-        String sql = buildDropStageSQL(stageIdentifier);
-        runUpdate(sql);
-    }
+  public void runCreateStage(StageIdentifier stageIdentifier) throws SQLException {
+    String sql = buildCreateStageSQL(stageIdentifier);
+    runUpdate(sql);
+  }
 
-    public void runUploadFile(StageIdentifier stageIdentifier, String filename ,FileInputStream fileInputStream) throws SQLException{
-        connection.unwrap(SnowflakeConnection.class).uploadStream(stageIdentifier.getStageName(), stageIdentifier.getDestPrefix().orElse("/"),
-                fileInputStream, filename + ".csv.gz", false);
-    }
+  public void runDropStage(StageIdentifier stageIdentifier) throws SQLException {
+    String sql = buildDropStageSQL(stageIdentifier);
+    runUpdate(sql);
+  }
 
-    public void runDeleteStageFile(StageIdentifier stageIdentifier, String filename) throws SQLException{
-        String sql = buildDeleteStageFileSQL(stageIdentifier, filename);
-        runUpdate(sql);
-    }
+  public void runUploadFile(
+      StageIdentifier stageIdentifier, String filename, FileInputStream fileInputStream)
+      throws SQLException {
+    connection
+        .unwrap(SnowflakeConnection.class)
+        .uploadStream(
+            stageIdentifier.getStageName(),
+            stageIdentifier.getDestPrefix().orElse("/"),
+            fileInputStream,
+            filename + ".csv.gz",
+            false);
+  }
 
-    protected void runUpdate(String sql) throws SQLException
-    {
-        Statement stmt = connection.createStatement();
-        try {
-            stmt.executeUpdate(sql);
-        } finally {
-            stmt.close();
-        }
-    }
+  public void runDeleteStageFile(StageIdentifier stageIdentifier, String filename)
+      throws SQLException {
+    String sql = buildDeleteStageFileSQL(stageIdentifier, filename);
+    runUpdate(sql);
+  }
 
-    @Override
-    protected String buildColumnTypeName(JdbcColumn c) {
-        switch(c.getSimpleTypeName()) {
-            case "CLOB":
-                return "VARCHAR(65535)";
-            default:
-                return super.buildColumnTypeName(c);
-        }
+  protected void runUpdate(String sql) throws SQLException {
+    Statement stmt = connection.createStatement();
+    try {
+      stmt.executeUpdate(sql);
+    } finally {
+      stmt.close();
     }
+  }
 
-    protected String buildCreateStageSQL(StageIdentifier stageIdentifier){
-        StringBuilder sb = new StringBuilder();
-        sb.append("CREATE STAGE IF NOT EXISTS ");
-        quoteStageIdentifier(sb, stageIdentifier);
-        sb.append(";");
-        return sb.toString();
+  @Override
+  protected String buildColumnTypeName(JdbcColumn c) {
+    switch (c.getSimpleTypeName()) {
+      case "CLOB":
+        return "VARCHAR(65535)";
+      default:
+        return super.buildColumnTypeName(c);
     }
+  }
 
-    protected String buildDropStageSQL(StageIdentifier stageIdentifier){
-        StringBuilder sb = new StringBuilder();
-        sb.append("DROP STAGE ");
-        quoteStageIdentifier(sb, stageIdentifier);
-        sb.append(";");
-        return sb.toString();
-    }
+  protected String buildCreateStageSQL(StageIdentifier stageIdentifier) {
+    StringBuilder sb = new StringBuilder();
+    sb.append("CREATE STAGE IF NOT EXISTS ");
+    quoteStageIdentifier(sb, stageIdentifier);
+    sb.append(";");
+    return sb.toString();
+  }
 
-    protected void quoteStageIdentifier(StringBuilder sb, StageIdentifier stageIdentifier){
-        sb.append(stageIdentifier.getDatabase());
-        sb.append(".");
-        sb.append(stageIdentifier.getSchemaName());
-        sb.append(".");
-        sb.append(stageIdentifier.getStageName());
-    }
+  protected String buildDropStageSQL(StageIdentifier stageIdentifier) {
+    StringBuilder sb = new StringBuilder();
+    sb.append("DROP STAGE ");
+    quoteStageIdentifier(sb, stageIdentifier);
+    sb.append(";");
+    return sb.toString();
+  }
 
-    protected String buildCopySQL(TableIdentifier tableIdentifier, StageIdentifier stageIdentifier, String snowflakeStageFileName, String delimiterString){
-        StringBuilder sb = new StringBuilder();
-        sb.append("COPY INTO ");
-        quoteTableIdentifier(sb, tableIdentifier);
-        sb.append(" FROM ");
-        quoteInternalStoragePath(sb, stageIdentifier, snowflakeStageFileName);
-        sb.append(" FILE_FORMAT = ( TYPE = CSV FIELD_DELIMITER = '");
-        sb.append(delimiterString);
-        sb.append("');");
-        return sb.toString();
-    }
+  protected void quoteStageIdentifier(StringBuilder sb, StageIdentifier stageIdentifier) {
+    sb.append(stageIdentifier.getDatabase());
+    sb.append(".");
+    sb.append(stageIdentifier.getSchemaName());
+    sb.append(".");
+    sb.append(stageIdentifier.getStageName());
+  }
 
-    protected String buildDeleteStageFileSQL(StageIdentifier stageIdentifier, String snowflakeStageFileName){
-        StringBuilder sb = new StringBuilder();
-        sb.append("REMOVE ");
-        quoteInternalStoragePath(sb, stageIdentifier, snowflakeStageFileName);
-        sb.append(';');
-        return sb.toString();
-    }
+  protected String buildCopySQL(
+      TableIdentifier tableIdentifier,
+      StageIdentifier stageIdentifier,
+      String snowflakeStageFileName,
+      String delimiterString) {
+    StringBuilder sb = new StringBuilder();
+    sb.append("COPY INTO ");
+    quoteTableIdentifier(sb, tableIdentifier);
+    sb.append(" FROM ");
+    quoteInternalStoragePath(sb, stageIdentifier, snowflakeStageFileName);
+    sb.append(" FILE_FORMAT = ( TYPE = CSV FIELD_DELIMITER = '");
+    sb.append(delimiterString);
+    sb.append("');");
+    return sb.toString();
+  }
 
-    protected String quoteInternalStoragePath(StringBuilder sb, StageIdentifier stageIdentifier,
-                                              String snowflakeStageFileName){
-        sb.append("@");
-        quoteStageIdentifier(sb, stageIdentifier);
-        if (stageIdentifier.getDestPrefix().isPresent()){
-            sb.append("/");
-            sb.append(stageIdentifier.getDestPrefix().get());
-        }
-        sb.append("/");
-        sb.append(snowflakeStageFileName);
-        sb.append(".csv.gz");
-        return sb.toString();
-    }
+  protected String buildDeleteStageFileSQL(
+      StageIdentifier stageIdentifier, String snowflakeStageFileName) {
+    StringBuilder sb = new StringBuilder();
+    sb.append("REMOVE ");
+    quoteInternalStoragePath(sb, stageIdentifier, snowflakeStageFileName);
+    sb.append(';');
+    return sb.toString();
+  }
 
-    // this code is borrowed from jdbc-output to change table name
-    public void executeSql(String sql) throws SQLException
-    {
-        Statement stmt = connection.createStatement();
-        try {
-            executeUpdate(stmt, sql);
-            commitIfNecessary(connection);
-        } catch (SQLException ex) {
-            throw safeRollback(connection, ex);
-        } finally {
-            stmt.close();
-        }
+  protected String quoteInternalStoragePath(
+      StringBuilder sb, StageIdentifier stageIdentifier, String snowflakeStageFileName) {
+    sb.append("@");
+    quoteStageIdentifier(sb, stageIdentifier);
+    if (stageIdentifier.getDestPrefix().isPresent()) {
+      sb.append("/");
+      sb.append(stageIdentifier.getDestPrefix().get());
     }
+    sb.append("/");
+    sb.append(snowflakeStageFileName);
+    sb.append(".csv.gz");
+    return sb.toString();
+  }
+
+  // this code is borrowed from jdbc-output to change table name
+  public void executeSql(String sql) throws SQLException {
+    Statement stmt = connection.createStatement();
+    try {
+      executeUpdate(stmt, sql);
+      commitIfNecessary(connection);
+    } catch (SQLException ex) {
+      throw safeRollback(connection, ex);
+    } finally {
+      stmt.close();
+    }
+  }
 }

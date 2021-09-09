@@ -3,13 +3,14 @@ plugins {
     id "checkstyle"
     id "maven-publish"
     id "org.embulk.embulk-plugins" version "0.4.2"
+    id "com.palantir.git-version" version "0.12.3"
 }
 repositories {
     mavenCentral()
 }
 
 group = "io.trocco"
-version = "0.3.1"
+version = versionDetails().lastTag
 description = "Dumps records to Snowflake."
 
 sourceCompatibility = 1.8

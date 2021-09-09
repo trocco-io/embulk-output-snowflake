@@ -10,7 +10,7 @@ repositories {
 }
 
 group = "io.trocco"
-version = gitVersion()
+version = versionDetails().lastTag
 description = "Dumps records to Snowflake."
 
 sourceCompatibility = 1.8

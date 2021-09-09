@@ -1,4 +1,4 @@
-0.3.1 (2021-09-07)
+0.3.1 (2021-09-09)
 ==================
 
 * Use [github.com/embulk/gradle-embulk-plugins](https://github.com/embulk/gradle-embulk-plugins) instead of old style gradle tasks.
@@ -6,3 +6,6 @@
 * Add lockfile to lock dependencies.
 * Add [CHANGELOG.md](./CHANGELOG.md).
     * There is no CHANGELOG for versions prior to 0.3.0.
+* [#17](https://github.com/trocco-io/embulk-output-snowflake/pull/17) Automate gem publishing workflow
+* [#18](https://github.com/trocco-io/embulk-output-snowflake/pull/18) Use spotless as a linter
+* [#18](https://github.com/trocco-io/embulk-output-snowflake/pull/18) Use [google-java-format](https://github.com/google/google-java-format) instead of [airlift style](https://github.com/airlift/codestyle).

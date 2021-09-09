@@ -12,3 +12,4 @@ build/
 .project
 config.yml
 default_jdbc_driver/
+/bin/

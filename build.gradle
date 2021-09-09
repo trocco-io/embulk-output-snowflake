@@ -3,6 +3,7 @@ plugins {
     id "maven-publish"
     id "org.embulk.embulk-plugins" version "0.4.2"
     id "com.palantir.git-version" version "0.12.3"
+    id "com.diffplug.spotless" version "5.15.0"
 }
 repositories {
     mavenCentral()
@@ -79,4 +80,11 @@ gem {
 }
 gemPush {
     host = "https://rubygems.org"
+}
+spotless {
+    java {
+        importOrder()
+        removeUnusedImports()
+        googleJavaFormat()
+    }
 }

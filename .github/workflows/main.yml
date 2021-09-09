@@ -21,9 +21,9 @@ jobs:
         uses: actions/setup-java@v1
         with:
           java-version: 1.8
-      # TODO: Change this step after appling spotless.
-      # - name: lint
-      #   run: ./gradlew checkstyle
+      - name: lint
+        # Run ./gradlew spotlessApply when failing on this step.
+        run: ./gradlew spotlessCheck
       - run: ./gradlew test
 
       - name: Show Current Version

@@ -50,7 +50,7 @@ dependencies {
     compile "net.snowflake:snowflake-jdbc:3.13.5"
 }
 embulkPlugin {
-    mainClass = "org.embulk.output.snowflake.SnowflakeOutputPlugin"
+    mainClass = "org.embulk.output.SnowflakeOutputPlugin"
     category = "output"
     type = "snowflake"
 }

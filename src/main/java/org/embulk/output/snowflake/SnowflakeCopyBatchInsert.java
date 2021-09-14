@@ -172,7 +172,7 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
     String f =
         String.format(
             Locale.ENGLISH,
-            "%02d-%02d-%02d",
+            "%04d-%02d-%02d",
             cal.get(Calendar.YEAR),
             cal.get(Calendar.MONTH) + 1,
             cal.get(Calendar.DAY_OF_MONTH));

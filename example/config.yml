@@ -1,0 +1,31 @@
+
+in:
+  type: file
+  path_prefix: ./example/data.tsv
+  parser:
+    type: csv
+    delimiter: "\t"
+    skip_header_lines: 0
+    null_string: ""
+    columns:
+      - { name: id, type: long }
+      - { name: description, type: string }
+      - { name: name, type: string }
+      - { name: t, type: timestamp, format: "%Y-%m-%d %H:%M:%S %z"}
+      - { name: payload, type: json}
+    stop_on_invalid_record: true
+
+out:
+  type: snowflake
+  host: <YOUR_SNOWFLAKE_HOST>
+  user: <YOUR_SNOWFLAKE_USER>
+  password: <YOUR_SNOWFLAKE_PASSWORD>
+  warehouse: <YOUR_SNOWFLAKE_WAREHOUSE>
+  database: <YOUR_SNOWFLAKE_DATABASE>
+  schema: <YOUR_SNOWFLAKE_SCHEMA>
+  table: <YOUR_SNOWFLAKE_TABLE>
+  retry_limit: 12
+  retry_wait: 1000
+  max_retry_wait: 1800000
+  mode: insert
+  default_timezone: UTC

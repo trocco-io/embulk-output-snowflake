@@ -57,7 +57,7 @@ jobs:
           printf -- "---\n:rubygems_api_key: ${GEM_HOST_API_KEY}\n" > $HOME/.gem/credentials
           # TODO: If it is possible to accept input in the middle of a step, then the OTP Token should be inputted instead of generated.
           gem install rotp -v 6.2.0
-          OTP_TOKEN=$(ruby -rtime -rrotp -e "puts ROTP::TOTP.new('${OTP_SECRET}', issuer: 'rubygems.org').at(Time.now)")
+          OTP_TOKEN=$(echo ${OTP_SECRET} | ruby -rtime -rrotp -e "puts ROTP::TOTP.new(STDIN.read.chomp, issuer: 'rubygems.org').at(Time.now)")
           gem push --otp="${OTP_TOKEN}" ./build/gems/*.gem
         env:
           GEM_HOST_API_KEY: "${{secrets.RUBYGEMS_API_KEY}}"

@@ -1,3 +1,8 @@
+0.3.3 (2021-09-16)
+==================
+
+* [#25](https://github.com/trocco-io/embulk-output-snowflake/pull/25) Support `NUMBER` type truly.
+
 0.3.2 (2021-09-14)
 ==================
 

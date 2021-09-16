@@ -67,6 +67,9 @@ public class SnowflakeOutputConnection extends JdbcOutputConnection {
     switch (c.getSimpleTypeName()) {
       case "CLOB":
         return "VARCHAR(65535)";
+      case "NUMBER":
+        // ref. https://docs.snowflake.com/en/sql-reference/data-types-numeric.html
+        return String.format("NUMBER(%d,%d)", c.getSizeTypeParameter(), c.getScaleTypeParameter());
       default:
         return super.buildColumnTypeName(c);
     }

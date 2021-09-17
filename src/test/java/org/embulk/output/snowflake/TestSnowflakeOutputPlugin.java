@@ -9,7 +9,13 @@ import org.embulk.spi.FileInputPlugin;
 import org.embulk.spi.OutputPlugin;
 import org.embulk.spi.ParserPlugin;
 import org.embulk.test.TestingEmbulk;
+import org.embulk.util.config.ConfigMapper;
+import org.embulk.util.config.ConfigMapperFactory;
+import org.embulk.util.config.TaskMapper;
 import org.junit.Rule;
+import org.junit.rules.TemporaryFolder;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class TestSnowflakeOutputPlugin {
   private static final EmbulkSystemProperties EMBULK_SYSTEM_PROPERTIES =
@@ -23,4 +29,13 @@ public class TestSnowflakeOutputPlugin {
           .registerPlugin(ParserPlugin.class, "csv", CsvParserPlugin.class)
           .registerPlugin(OutputPlugin.class, "snowflake", SnowflakeOutputPlugin.class)
           .build();
+
+  @Rule public TemporaryFolder testFolder = new TemporaryFolder();
+
+  private static final ConfigMapperFactory CONFIG_MAPPER_FACTORY =
+      ConfigMapperFactory.builder().addDefaultModules().build();
+  private static final ConfigMapper CONFIG_MAPPER = CONFIG_MAPPER_FACTORY.createConfigMapper();
+  private static final TaskMapper TASK_MAPPER = CONFIG_MAPPER_FACTORY.createTaskMapper();
+
+  private Logger logger = LoggerFactory.getLogger(TestSnowflakeOutputPlugin.class);
 }

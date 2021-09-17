@@ -44,7 +44,10 @@ dependencies {
     testImplementation "junit:junit:4.+"
     testImplementation "org.embulk:embulk-junit4:0.10.31"
     testImplementation "org.embulk:embulk-core:0.10.31"
+    testImplementation "org.embulk:embulk-core:0.10.31:tests"
     testImplementation "org.embulk:embulk-deps:0.10.31"
+    testImplementation "org.embulk:embulk-input-file:0.10.31"
+    testImplementation "org.embulk:embulk-parser-csv:0.10.31"
 
     compile "org.embulk:embulk-output-jdbc:0.10.1"
     compile "net.snowflake:snowflake-jdbc:3.13.5"

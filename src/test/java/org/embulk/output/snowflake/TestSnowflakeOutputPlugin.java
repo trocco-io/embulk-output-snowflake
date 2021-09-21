@@ -38,4 +38,17 @@ public class TestSnowflakeOutputPlugin {
   private static final TaskMapper TASK_MAPPER = CONFIG_MAPPER_FACTORY.createTaskMapper();
 
   private Logger logger = LoggerFactory.getLogger(TestSnowflakeOutputPlugin.class);
+
+  public static final Properties TEST_PROPERTIES;
+
+  static {
+    Properties props = new Properties();
+    props.setProperty("host", System.getenv("EMBULK_OUTPUT_SNOWFLAKE_TEST_HOST"));
+    props.setProperty("user", System.getenv("EMBULK_OUTPUT_SNOWFLAKE_TEST_USER"));
+    props.setProperty("password", System.getenv("EMBULK_OUTPUT_SNOWFLAKE_TEST_PASSWORD"));
+    props.setProperty("warehouse", System.getenv("EMBULK_OUTPUT_SNOWFLAKE_TEST_WAREHOUSE"));
+    props.setProperty("db", System.getenv("EMBULK_OUTPUT_SNOWFLAKE_TEST_DATABASE"));
+    props.setProperty("schema", System.getenv("EMBULK_OUTPUT_SNOWFLAKE_TEST_SCHEMA"));
+    TEST_PROPERTIES = props;
+  }
 }

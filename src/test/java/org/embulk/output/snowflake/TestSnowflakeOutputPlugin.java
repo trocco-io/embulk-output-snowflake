@@ -12,6 +12,7 @@ import org.embulk.test.TestingEmbulk;
 import org.embulk.util.config.ConfigMapper;
 import org.embulk.util.config.ConfigMapperFactory;
 import org.embulk.util.config.TaskMapper;
+import org.embulk.util.config.modules.ZoneIdModule;
 import org.junit.Rule;
 import org.junit.rules.TemporaryFolder;
 import org.slf4j.Logger;
@@ -33,7 +34,10 @@ public class TestSnowflakeOutputPlugin {
   @Rule public TemporaryFolder testFolder = new TemporaryFolder();
 
   private static final ConfigMapperFactory CONFIG_MAPPER_FACTORY =
-      ConfigMapperFactory.builder().addDefaultModules().build();
+      ConfigMapperFactory.builder()
+          .addDefaultModules()
+          .addModule(ZoneIdModule.withLegacyNames())
+          .build();
   private static final ConfigMapper CONFIG_MAPPER = CONFIG_MAPPER_FACTORY.createConfigMapper();
   private static final TaskMapper TASK_MAPPER = CONFIG_MAPPER_FACTORY.createTaskMapper();
 

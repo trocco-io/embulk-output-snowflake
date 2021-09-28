@@ -3,8 +3,14 @@ package org.embulk.output.snowflake;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
 
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.function.Consumer;
 import org.embulk.EmbulkSystemProperties;
 import org.embulk.config.ConfigException;
 import org.embulk.config.ConfigSource;
@@ -76,6 +82,36 @@ public class TestSnowflakeOutputPlugin {
     props.setProperty("db", TEST_SNOWFLAKE_DB);
     props.setProperty("schema", TEST_SNOWFLAKE_SCHEMA);
     TEST_PROPERTIES = props;
+  }
+
+  // select
+  private void runQuery(String query, Consumer<ResultSet> f) {
+    // load driver
+    try {
+      Class.forName("net.snowflake.client.jdbc.SnowflakeDriver");
+    } catch (ClassNotFoundException e) {
+      throw new RuntimeException(e);
+    }
+    String uri = String.format("jdbc:snowflake://%s", TEST_PROPERTIES.getProperty("host"));
+    try (Connection conn = DriverManager.getConnection(uri, TEST_PROPERTIES);
+        Statement stmt = conn.createStatement();
+        ResultSet rset = stmt.executeQuery(query); ) {
+      f.accept(rset);
+    } catch (SQLException e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  private Consumer<ResultSet> foreachResult(Consumer<ResultSet> f) {
+    return rs -> {
+      try {
+        while (rs.next()) {
+          f.accept(rs);
+        }
+      } catch (SQLException e) {
+        throw new RuntimeException(e);
+      }
+    };
   }
 
   @Test

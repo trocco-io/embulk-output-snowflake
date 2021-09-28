@@ -84,8 +84,21 @@ public class TestSnowflakeOutputPlugin {
     TEST_PROPERTIES = props;
   }
 
+  private interface ThrowableConsumer<T> extends Consumer<T> {
+    @Override
+    default void accept(T t) {
+      try {
+        acceptThrows(t);
+      } catch (Throwable e) {
+        throw new RuntimeException(e);
+      }
+    }
+
+    void acceptThrows(T t) throws Throwable;
+  }
+
   // select
-  private void runQuery(String query, Consumer<ResultSet> f) {
+  private void runQuery(String query, ThrowableConsumer<ResultSet> f) {
     // load driver
     try {
       Class.forName("net.snowflake.client.jdbc.SnowflakeDriver");
@@ -102,7 +115,7 @@ public class TestSnowflakeOutputPlugin {
     }
   }
 
-  private Consumer<ResultSet> foreachResult(Consumer<ResultSet> f) {
+  private ThrowableConsumer<ResultSet> foreachResult(ThrowableConsumer<ResultSet> f) {
     return rs -> {
       try {
         while (rs.next()) {

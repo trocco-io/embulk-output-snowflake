@@ -39,16 +39,30 @@ public class TestSnowflakeOutputPlugin {
 
   private Logger logger = LoggerFactory.getLogger(TestSnowflakeOutputPlugin.class);
 
+  private static final String TEST_SNOWFLAKE_HOST =
+      Optional.ofNullable(System.getenv("EMBULK_OUTPUT_SNOWFLAKE_TEST_HOST")).orElse("localhost");
+  private static final String TEST_SNOWFLAKE_USER =
+      Optional.ofNullable(System.getenv("EMBULK_OUTPUT_SNOWFLAKE_TEST_USER")).orElse("user");
+  private static final String TEST_SNOWFLAKE_PASSWORD =
+      Optional.ofNullable(System.getenv("EMBULK_OUTPUT_SNOWFLAKE_TEST_PASSWORD"))
+          .orElse("password");
+  private static final String TEST_SNOWFLAKE_WAREHOUSE =
+      Optional.ofNullable(System.getenv("EMBULK_OUTPUT_SNOWFLAKE_TEST_WAREHOUSE"))
+          .orElse("warehouse");
+  private static final String TEST_SNOWFLAKE_DB =
+      Optional.ofNullable(System.getenv("EMBULK_OUTPUT_SNOWFLAKE_TEST_DATABASE")).orElse("db");
+  private static final String TEST_SNOWFLAKE_SCHEMA =
+      Optional.ofNullable(System.getenv("EMBULK_OUTPUT_SNOWFLAKE_TEST_SCHEMA")).orElse("schema");
   public static final Properties TEST_PROPERTIES;
 
   static {
     Properties props = new Properties();
-    props.setProperty("host", System.getenv("EMBULK_OUTPUT_SNOWFLAKE_TEST_HOST"));
-    props.setProperty("user", System.getenv("EMBULK_OUTPUT_SNOWFLAKE_TEST_USER"));
-    props.setProperty("password", System.getenv("EMBULK_OUTPUT_SNOWFLAKE_TEST_PASSWORD"));
-    props.setProperty("warehouse", System.getenv("EMBULK_OUTPUT_SNOWFLAKE_TEST_WAREHOUSE"));
-    props.setProperty("db", System.getenv("EMBULK_OUTPUT_SNOWFLAKE_TEST_DATABASE"));
-    props.setProperty("schema", System.getenv("EMBULK_OUTPUT_SNOWFLAKE_TEST_SCHEMA"));
+    props.setProperty("host", TEST_SNOWFLAKE_HOST);
+    props.setProperty("user", TEST_SNOWFLAKE_USER);
+    props.setProperty("password", TEST_SNOWFLAKE_PASSWORD);
+    props.setProperty("warehouse", TEST_SNOWFLAKE_WAREHOUSE);
+    props.setProperty("db", TEST_SNOWFLAKE_DB);
+    props.setProperty("schema", TEST_SNOWFLAKE_SCHEMA);
     TEST_PROPERTIES = props;
   }
 }

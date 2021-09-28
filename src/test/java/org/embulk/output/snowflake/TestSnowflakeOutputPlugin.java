@@ -3,14 +3,21 @@ package org.embulk.output.snowflake;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
 
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.embulk.EmbulkSystemProperties;
 import org.embulk.config.ConfigException;
 import org.embulk.config.ConfigSource;
@@ -180,5 +187,47 @@ public class TestSnowflakeOutputPlugin {
           c.remove("warehouse");
           CONFIG_MAPPER.map(c, SnowflakePluginTask.class);
         });
+  }
+
+  @Test
+  public void testRuntimeReplaceStringTable() throws IOException {
+    File in = testFolder.newFile(SnowflakeUtils.randomString(8) + ".csv");
+    List<String> lines =
+        Stream.of("c0:double,c1:string", "0.0,aaa", "0.1,bbb", "1.2,ccc")
+            .collect(Collectors.toList());
+    Files.write(in.toPath(), lines);
+
+    final ConfigSource config =
+        CONFIG_MAPPER_FACTORY
+            .newConfigSource()
+            .set("type", "snowflake")
+            .set("user", TEST_SNOWFLAKE_USER)
+            .set("password", TEST_SNOWFLAKE_PASSWORD)
+            .set("host", TEST_SNOWFLAKE_HOST)
+            .set("database", TEST_SNOWFLAKE_DB)
+            .set("warehouse", TEST_SNOWFLAKE_WAREHOUSE)
+            .set("schema", TEST_SNOWFLAKE_SCHEMA)
+            .set("mode", "replace")
+            .set("table", "test");
+    embulk.runOutput(config, in.toPath());
+
+    String tableName =
+        String.format("\"%s\".\"%s\".\"%s\"", TEST_SNOWFLAKE_DB, TEST_SNOWFLAKE_SCHEMA, "test");
+    runQuery(
+        "select count(1) from " + tableName,
+        foreachResult(
+            rs -> {
+              assertEquals(3, rs.getInt(1));
+            }));
+    List<String> results = new ArrayList();
+    runQuery(
+        "select \"c1\" from " + tableName + " order by 1",
+        foreachResult(
+            rs -> {
+              results.add(rs.getString(1));
+            }));
+    for (int i = 0; i < results.size(); i++) {
+      assertEquals(lines.get(i + 1).split(",")[1], results.get(i));
+    }
   }
 }

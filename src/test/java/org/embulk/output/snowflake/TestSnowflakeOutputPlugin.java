@@ -1,9 +1,16 @@
 package org.embulk.output.snowflake;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
+
+import java.util.Optional;
 import java.util.Properties;
 import org.embulk.EmbulkSystemProperties;
+import org.embulk.config.ConfigException;
+import org.embulk.config.ConfigSource;
 import org.embulk.input.file.LocalFileInputPlugin;
 import org.embulk.output.SnowflakeOutputPlugin;
+import org.embulk.output.SnowflakeOutputPlugin.SnowflakePluginTask;
 import org.embulk.parser.csv.CsvParserPlugin;
 import org.embulk.spi.FileInputPlugin;
 import org.embulk.spi.OutputPlugin;
@@ -14,6 +21,7 @@ import org.embulk.util.config.ConfigMapperFactory;
 import org.embulk.util.config.TaskMapper;
 import org.embulk.util.config.modules.ZoneIdModule;
 import org.junit.Rule;
+import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -68,5 +76,60 @@ public class TestSnowflakeOutputPlugin {
     props.setProperty("db", TEST_SNOWFLAKE_DB);
     props.setProperty("schema", TEST_SNOWFLAKE_SCHEMA);
     TEST_PROPERTIES = props;
+  }
+
+  @Test
+  public void testConfigDefault() throws Exception {
+    final ConfigSource config =
+        CONFIG_MAPPER_FACTORY
+            .newConfigSource()
+            .set("type", "snowflake")
+            .set("host", TEST_SNOWFLAKE_HOST)
+            .set("database", TEST_SNOWFLAKE_DB)
+            .set("warehouse", TEST_SNOWFLAKE_WAREHOUSE)
+            .set("mode", "insert")
+            .set("table", "test");
+    final SnowflakePluginTask task = CONFIG_MAPPER.map(config, SnowflakePluginTask.class);
+
+    assertEquals(Optional.empty(), task.getDriverPath());
+    assertEquals("", task.getUser());
+    assertEquals("", task.getPassword());
+    assertEquals("public", task.getSchema());
+    assertEquals(false, task.getDeleteStage());
+  }
+
+  @Test
+  public void testConfigExceptions() throws Exception {
+    final ConfigSource config =
+        CONFIG_MAPPER_FACTORY
+            .newConfigSource()
+            .set("type", "snowflake")
+            .set("host", TEST_SNOWFLAKE_HOST)
+            .set("database", TEST_SNOWFLAKE_DB)
+            .set("warehouse", TEST_SNOWFLAKE_WAREHOUSE)
+            .set("mode", "insert")
+            .set("table", "test");
+
+    assertThrows(
+        ConfigException.class,
+        () -> {
+          ConfigSource c = config.deepCopy();
+          c.remove("host");
+          CONFIG_MAPPER.map(c, SnowflakePluginTask.class);
+        });
+    assertThrows(
+        ConfigException.class,
+        () -> {
+          ConfigSource c = config.deepCopy();
+          c.remove("database");
+          CONFIG_MAPPER.map(c, SnowflakePluginTask.class);
+        });
+    assertThrows(
+        ConfigException.class,
+        () -> {
+          ConfigSource c = config.deepCopy();
+          c.remove("warehouse");
+          CONFIG_MAPPER.map(c, SnowflakePluginTask.class);
+        });
   }
 }

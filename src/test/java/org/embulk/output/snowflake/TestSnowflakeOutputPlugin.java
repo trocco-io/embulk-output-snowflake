@@ -202,7 +202,7 @@ public class TestSnowflakeOutputPlugin {
     String columnName = "_c0";
 
     File in = testFolder.newFile(SnowflakeUtils.randomString(8) + ".csv");
-    String[] data = new String[] {"aaa", "bbb", "ccc"};
+    String[] data = new String[] {"aaa", "bbb", "ccc", "あああ", "いいい"};
     Files.write(in.toPath(), lines(columnName + ":string", data));
 
     final ConfigSource config =
@@ -223,7 +223,7 @@ public class TestSnowflakeOutputPlugin {
         String.format("select count(1) from \"%s\"", tableName),
         foreachResult(
             rs -> {
-              assertEquals(3, rs.getInt(1));
+              assertEquals(data.length, rs.getInt(1));
             }));
     runQuery(
         String.format("select \"%s\" from \"%s\" order by 1", columnName, tableName),

@@ -25,6 +25,14 @@ jobs:
         # Run ./gradlew spotlessApply when failing on this step.
         run: ./gradlew spotlessCheck
       - run: ./gradlew test
+        env:
+          EMBULK_OUTPUT_SNOWFLAKE_TEST_HOST: "${{ secrets.EMBULK_OUTPUT_SNOWFLAKE_TEST_HOST }}"
+          EMBULK_OUTPUT_SNOWFLAKE_TEST_USER: "${{ secrets.EMBULK_OUTPUT_SNOWFLAKE_TEST_USER }}"
+          EMBULK_OUTPUT_SNOWFLAKE_TEST_PASSWORD: "${{ secrets.EMBULK_OUTPUT_SNOWFLAKE_TEST_PASSWORD }}"
+          EMBULK_OUTPUT_SNOWFLAKE_TEST_WAREHOUSE: "${{ secrets.EMBULK_OUTPUT_SNOWFLAKE_TEST_WAREHOUSE }}"
+          EMBULK_OUTPUT_SNOWFLAKE_TEST_DATABASE: "${{ secrets.EMBULK_OUTPUT_SNOWFLAKE_TEST_DATABASE }}"
+          EMBULK_OUTPUT_SNOWFLAKE_TEST_SCHEMA: "${{ secrets.EMBULK_OUTPUT_SNOWFLAKE_TEST_SCHEMA }}"
+
 
       - name: Show Current Version
         run: ./gradlew printVersion

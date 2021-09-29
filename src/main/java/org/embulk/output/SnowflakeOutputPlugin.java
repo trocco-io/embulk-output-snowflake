@@ -6,7 +6,6 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Optional;
 import java.util.Properties;
-
 import org.embulk.config.ConfigDiff;
 import org.embulk.config.TaskSource;
 import org.embulk.output.jdbc.AbstractJdbcOutputPlugin;
@@ -65,9 +64,11 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
 
   @Override
   protected Features getFeatures(PluginTask task) {
-    return new Features().setMaxTableNameLength(127)
+    return new Features()
+        .setMaxTableNameLength(127)
         .setSupportedModes(
-            new HashSet<>(Arrays.asList(Mode.INSERT, Mode.INSERT_DIRECT, Mode.TRUNCATE_INSERT, Mode.REPLACE)))
+            new HashSet<>(
+                Arrays.asList(Mode.INSERT, Mode.INSERT_DIRECT, Mode.TRUNCATE_INSERT, Mode.REPLACE)))
         .setIgnoreMergeKeys(false);
   }
 
@@ -95,12 +96,14 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
   }
 
   @Override
-  public ConfigDiff resume(TaskSource taskSource, Schema schema, int taskCount, OutputPlugin.Control control) {
+  public ConfigDiff resume(
+      TaskSource taskSource, Schema schema, int taskCount, OutputPlugin.Control control) {
     throw new UnsupportedOperationException("snowflake output plugin does not support resuming");
   }
 
   @Override
-  protected void doCommit(JdbcOutputConnection con, PluginTask task, int taskCount) throws SQLException {
+  protected void doCommit(JdbcOutputConnection con, PluginTask task, int taskCount)
+      throws SQLException {
     super.doCommit(con, task, taskCount);
     SnowflakeOutputConnection snowflakeCon = (SnowflakeOutputConnection) con;
 
@@ -115,7 +118,8 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
   }
 
   @Override
-  protected void doBegin(JdbcOutputConnection con, PluginTask task, final Schema schema, int taskCount)
+  protected void doBegin(
+      JdbcOutputConnection con, PluginTask task, final Schema schema, int taskCount)
       throws SQLException {
     super.doBegin(con, task, schema, taskCount);
   }
@@ -124,18 +128,19 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
   protected BatchInsert newBatchInsert(PluginTask task, Optional<MergeConfig> mergeConfig)
       throws IOException, SQLException {
     if (mergeConfig.isPresent()) {
-      throw new UnsupportedOperationException("Snowflake output plugin doesn't support 'merge_direct' mode.");
+      throw new UnsupportedOperationException(
+          "Snowflake output plugin doesn't support 'merge_direct' mode.");
     }
 
     SnowflakePluginTask t = (SnowflakePluginTask) task;
     // TODO: put some where executes once
     if (this.stageIdentifier == null) {
-      SnowflakeOutputConnection snowflakeCon = (SnowflakeOutputConnection) getConnector(task, true).connect(true);
+      SnowflakeOutputConnection snowflakeCon =
+          (SnowflakeOutputConnection) getConnector(task, true).connect(true);
       this.stageIdentifier = StageIdentifierHolder.getStageIdentifier(t);
       snowflakeCon.runCreateStage(this.stageIdentifier);
     }
 
     return new SnowflakeCopyBatchInsert(getConnector(task, true), this.stageIdentifier, false);
   }
-
 }

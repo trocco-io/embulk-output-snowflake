@@ -4,6 +4,7 @@ plugins {
     id "org.embulk.embulk-plugins" version "0.4.2"
     id "com.palantir.git-version" version "0.12.3"
     id "com.diffplug.spotless" version "5.15.0"
+    id "com.adarshr.test-logger" version "3.0.0"
 }
 repositories {
     mavenCentral()
@@ -44,7 +45,10 @@ dependencies {
     testImplementation "junit:junit:4.+"
     testImplementation "org.embulk:embulk-junit4:0.10.31"
     testImplementation "org.embulk:embulk-core:0.10.31"
+    testImplementation "org.embulk:embulk-core:0.10.31:tests"
     testImplementation "org.embulk:embulk-deps:0.10.31"
+    testImplementation "org.embulk:embulk-input-file:0.10.31"
+    testImplementation "org.embulk:embulk-parser-csv:0.10.31"
 
     compile "org.embulk:embulk-output-jdbc:0.10.1"
     compile "net.snowflake:snowflake-jdbc:3.13.5"

@@ -137,5 +137,4 @@ public class SnowflakeOutputConnection extends JdbcOutputConnection {
     sb.append(".csv.gz");
     return sb.toString();
   }
-
 }

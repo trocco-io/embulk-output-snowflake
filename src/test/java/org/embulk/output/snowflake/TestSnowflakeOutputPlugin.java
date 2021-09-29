@@ -198,9 +198,12 @@ public class TestSnowflakeOutputPlugin {
 
   @Test
   public void testRuntimeReplaceStringTable() throws IOException {
+    String tableName = "test";
+    String columnName = "_c0";
+
     File in = testFolder.newFile(SnowflakeUtils.randomString(8) + ".csv");
     String[] data = new String[] {"aaa", "bbb", "ccc"};
-    Files.write(in.toPath(), lines("_c0:string", data));
+    Files.write(in.toPath(), lines(columnName + ":string", data));
 
     final ConfigSource config =
         CONFIG_MAPPER_FACTORY
@@ -213,26 +216,21 @@ public class TestSnowflakeOutputPlugin {
             .set("warehouse", TEST_SNOWFLAKE_WAREHOUSE)
             .set("schema", TEST_SNOWFLAKE_SCHEMA)
             .set("mode", "replace")
-            .set("table", "test");
+            .set("table", tableName);
     embulk.runOutput(config, in.toPath());
 
-    String tableName =
-        String.format("\"%s\".\"%s\".\"%s\"", TEST_SNOWFLAKE_DB, TEST_SNOWFLAKE_SCHEMA, "test");
     runQuery(
-        "select count(1) from " + tableName,
+        String.format("select count(1) from \"%s\"", tableName),
         foreachResult(
             rs -> {
               assertEquals(3, rs.getInt(1));
             }));
-    List<String> results = new ArrayList();
     runQuery(
-        "select \"_c0\" from " + tableName + " order by 1",
+        String.format("select \"%s\" from \"%s\" order by 1", columnName, tableName),
         foreachResult(
             rs -> {
-              results.add(rs.getString(1));
+              int idx = rs.getRow() - 1;
+              assertEquals(data[idx], rs.getString(1));
             }));
-    for (int i = 0; i < results.size(); i++) {
-      assertEquals(data[i], results.get(i));
-    }
   }
 }

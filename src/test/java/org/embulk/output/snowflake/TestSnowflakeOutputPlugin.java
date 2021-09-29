@@ -189,13 +189,18 @@ public class TestSnowflakeOutputPlugin {
         });
   }
 
+  private List<String> lines(String header, String... data) {
+    // Remove hacking double column after merging https://github.com/embulk/embulk/pull/1476.
+    return Stream.concat(
+            Stream.of(header + ",_hack_double:double"), Stream.of(data).map(s -> s + ",1.0"))
+        .collect(Collectors.toList());
+  }
+
   @Test
   public void testRuntimeReplaceStringTable() throws IOException {
     File in = testFolder.newFile(SnowflakeUtils.randomString(8) + ".csv");
-    List<String> lines =
-        Stream.of("c0:double,c1:string", "0.0,aaa", "0.1,bbb", "1.2,ccc")
-            .collect(Collectors.toList());
-    Files.write(in.toPath(), lines);
+    String[] data = new String[] {"aaa", "bbb", "ccc"};
+    Files.write(in.toPath(), lines("_c0:string", data));
 
     final ConfigSource config =
         CONFIG_MAPPER_FACTORY
@@ -221,13 +226,13 @@ public class TestSnowflakeOutputPlugin {
             }));
     List<String> results = new ArrayList();
     runQuery(
-        "select \"c1\" from " + tableName + " order by 1",
+        "select \"_c0\" from " + tableName + " order by 1",
         foreachResult(
             rs -> {
               results.add(rs.getString(1));
             }));
     for (int i = 0; i < results.size(); i++) {
-      assertEquals(lines.get(i + 1).split(",")[1], results.get(i));
+      assertEquals(data[i], results.get(i));
     }
   }
 }

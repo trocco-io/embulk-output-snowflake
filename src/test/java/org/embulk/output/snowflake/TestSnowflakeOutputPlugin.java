@@ -11,7 +11,6 @@ import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
@@ -204,6 +203,44 @@ public class TestSnowflakeOutputPlugin {
     File in = testFolder.newFile(SnowflakeUtils.randomString(8) + ".csv");
     String[] data = new String[] {"aaa", "bbb", "ccc", "あああ", "いいい"};
     Files.write(in.toPath(), lines(columnName + ":string", data));
+
+    final ConfigSource config =
+        CONFIG_MAPPER_FACTORY
+            .newConfigSource()
+            .set("type", "snowflake")
+            .set("user", TEST_SNOWFLAKE_USER)
+            .set("password", TEST_SNOWFLAKE_PASSWORD)
+            .set("host", TEST_SNOWFLAKE_HOST)
+            .set("database", TEST_SNOWFLAKE_DB)
+            .set("warehouse", TEST_SNOWFLAKE_WAREHOUSE)
+            .set("schema", TEST_SNOWFLAKE_SCHEMA)
+            .set("mode", "replace")
+            .set("table", tableName);
+    embulk.runOutput(config, in.toPath());
+
+    runQuery(
+        String.format("select count(1) from \"%s\"", tableName),
+        foreachResult(
+            rs -> {
+              assertEquals(data.length, rs.getInt(1));
+            }));
+    runQuery(
+        String.format("select \"%s\" from \"%s\" order by 1", columnName, tableName),
+        foreachResult(
+            rs -> {
+              int idx = rs.getRow() - 1;
+              assertEquals(data[idx], rs.getString(1));
+            }));
+  }
+
+  @Test
+  public void testRuntimeReplaceLongTable() throws IOException {
+    String tableName = "test";
+    String columnName = "_c0";
+
+    File in = testFolder.newFile(SnowflakeUtils.randomString(8) + ".csv");
+    String[] data = new String[] {"-1", "0", "1"};
+    Files.write(in.toPath(), lines(columnName + ":long", data));
 
     final ConfigSource config =
         CONFIG_MAPPER_FACTORY

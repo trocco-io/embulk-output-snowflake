@@ -267,7 +267,8 @@ public class TestSnowflakeOutputPlugin {
     }
   }
 
-  @Ignore("This test takes so long time because it needs to create more than 1000 tables, so ignored...")
+  @Ignore(
+      "This test takes so long time because it needs to create more than 1000 tables, so ignored...")
   @Test(expected = Test.None.class /* no exception expected */)
   public void testRunnableEvenIfMoreThan1001TasksRun() throws IOException {
     File in = testFolder.newFile(SnowflakeUtils.randomString(8) + ".csv");

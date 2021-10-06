@@ -50,7 +50,7 @@ dependencies {
     testImplementation "org.embulk:embulk-input-file:0.10.31"
     testImplementation "org.embulk:embulk-parser-csv:0.10.31"
 
-    compile "org.embulk:embulk-output-jdbc:0.10.1"
+    compile "org.embulk:embulk-output-jdbc:0.10.2"
     compile "net.snowflake:snowflake-jdbc:3.13.5"
 }
 embulkPlugin {

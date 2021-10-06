@@ -2,6 +2,7 @@ package org.embulk.output.snowflake;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
 
 import java.io.File;
 import java.io.IOException;
@@ -18,6 +19,7 @@ import java.util.Properties;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import org.embulk.EmbulkEmbed;
 import org.embulk.EmbulkSystemProperties;
 import org.embulk.config.ConfigException;
 import org.embulk.config.ConfigSource;
@@ -28,11 +30,15 @@ import org.embulk.parser.csv.CsvParserPlugin;
 import org.embulk.spi.FileInputPlugin;
 import org.embulk.spi.OutputPlugin;
 import org.embulk.spi.ParserPlugin;
+import org.embulk.spi.type.Types;
 import org.embulk.test.TestingEmbulk;
+import org.embulk.test.TestingEmbulk.RunResult;
 import org.embulk.util.config.ConfigMapper;
 import org.embulk.util.config.ConfigMapperFactory;
 import org.embulk.util.config.TaskMapper;
 import org.embulk.util.config.modules.ZoneIdModule;
+import org.embulk.util.config.units.ColumnConfig;
+import org.embulk.util.config.units.SchemaConfig;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -229,5 +235,61 @@ public class TestSnowflakeOutputPlugin {
     for (int i = 0; i < results.size(); i++) {
       assertEquals(lines.get(i + 1).split(",")[1], results.get(i));
     }
+  }
+
+  @Test(expected = Test.None.class /* no exception expected */)
+  public void testRunnableEvenIfMoreThan1001TasksRun() throws IOException {
+    File in = testFolder.newFile(SnowflakeUtils.randomString(8) + ".csv");
+    List<String> lines = Stream.of("aaa", "bbb", "ccc").collect(Collectors.toList());
+    Files.write(in.toPath(), lines);
+
+    final ConfigSource parserConfig =
+        CONFIG_MAPPER_FACTORY
+            .newConfigSource()
+            .set("charset", "UTF-8")
+            .set("newline", "LF")
+            .set("type", "csv")
+            .set("delimiter", ",")
+            .set("quote", "\"")
+            .set("escape", "\"")
+            .set(
+                "columns",
+                new SchemaConfig(
+                    Stream.of(
+                            new ColumnConfig(
+                                "c0", Types.STRING, CONFIG_MAPPER_FACTORY.newConfigSource()))
+                        .collect(Collectors.toList())));
+    final ConfigSource inConfig =
+        CONFIG_MAPPER_FACTORY
+            .newConfigSource()
+            .set("type", "file")
+            .set("path_prefix", in.getAbsolutePath())
+            .set("parser", parserConfig);
+    final ConfigSource outConfig =
+        CONFIG_MAPPER_FACTORY
+            .newConfigSource()
+            .set("type", "snowflake")
+            .set("user", TEST_SNOWFLAKE_USER)
+            .set("password", TEST_SNOWFLAKE_PASSWORD)
+            .set("host", TEST_SNOWFLAKE_HOST)
+            .set("database", TEST_SNOWFLAKE_DB)
+            .set("warehouse", TEST_SNOWFLAKE_WAREHOUSE)
+            .set("schema", TEST_SNOWFLAKE_SCHEMA)
+            .set("mode", "insert")
+            .set("table", "test");
+    final ConfigSource execConfig =
+        CONFIG_MAPPER_FACTORY.newConfigSource().set("min_output_tasks", 1001);
+
+    final EmbulkEmbed embed = TestingEmbulkHack.getEmbulkEmbed(embulk);
+    final ConfigSource config =
+        embed
+            .newConfigLoader()
+            .newConfigSource()
+            .set("exec", execConfig)
+            .set("in", inConfig)
+            .set("out", outConfig);
+
+    RunResult result = (RunResult) embed.run(config);
+    assertTrue(result.getIgnoredExceptions().isEmpty());
   }
 }

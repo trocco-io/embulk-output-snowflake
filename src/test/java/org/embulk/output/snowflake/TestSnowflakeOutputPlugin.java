@@ -234,7 +234,7 @@ public class TestSnowflakeOutputPlugin {
   @Test
   public void testRuntimeReplaceStringTable() throws IOException {
     File in = testFolder.newFile(SnowflakeUtils.randomString(8) + ".csv");
-    String[] data = new String[] {"aaa", "bbb", "ccc"};
+    String[] data = new String[] {"aaa", "bbb", "ccc", "あああ", "雪"};
     Files.write(in.toPath(), lines("_c0:string", data));
 
     final String tableName = generateTemporaryTableName();
@@ -258,7 +258,7 @@ public class TestSnowflakeOutputPlugin {
         "select count(1) from " + fullTableName,
         foreachResult(
             rs -> {
-              assertEquals(3, rs.getInt(1));
+              assertEquals(data.length, rs.getInt(1));
             }));
     List<String> results = new ArrayList();
     runQuery(
@@ -266,6 +266,88 @@ public class TestSnowflakeOutputPlugin {
         foreachResult(
             rs -> {
               results.add(rs.getString(1));
+            }));
+    for (int i = 0; i < results.size(); i++) {
+      assertEquals(data[i], results.get(i));
+    }
+  }
+
+  @Test
+  public void testRuntimeReplaceLongTable() throws IOException {
+    File in = testFolder.newFile(SnowflakeUtils.randomString(8) + ".csv");
+    Long[] data = new Long[] {1L, 2L, 3L};
+    Files.write(in.toPath(), lines("_c0:long", Stream.of(data).map(String::valueOf).toArray(String[]::new)));
+
+    final String tableName = generateTemporaryTableName();
+    final ConfigSource config =
+        CONFIG_MAPPER_FACTORY
+            .newConfigSource()
+            .set("type", "snowflake")
+            .set("user", TEST_SNOWFLAKE_USER)
+            .set("password", TEST_SNOWFLAKE_PASSWORD)
+            .set("host", TEST_SNOWFLAKE_HOST)
+            .set("database", TEST_SNOWFLAKE_DB)
+            .set("warehouse", TEST_SNOWFLAKE_WAREHOUSE)
+            .set("schema", TEST_SNOWFLAKE_SCHEMA)
+            .set("mode", "replace")
+            .set("table", tableName);
+    embulk.runOutput(config, in.toPath());
+
+    String fullTableName =
+        String.format("\"%s\".\"%s\".\"%s\"", TEST_SNOWFLAKE_DB, TEST_SNOWFLAKE_SCHEMA, tableName);
+    runQuery(
+        "select count(1) from " + fullTableName,
+        foreachResult(
+            rs -> {
+              assertEquals(data.length, rs.getInt(1));
+            }));
+    List<Long> results = new ArrayList();
+    runQuery(
+        "select \"_c0\" from " + fullTableName + " order by 1",
+        foreachResult(
+            rs -> {
+              results.add(rs.getLong(1));
+            }));
+    for (int i = 0; i < results.size(); i++) {
+      assertEquals(data[i], results.get(i));
+    }
+  }
+
+  @Test
+  public void testRuntimeReplaceDoubleTable() throws IOException {
+    File in = testFolder.newFile(SnowflakeUtils.randomString(8) + ".csv");
+    Double[] data = new Double[] {1.1d, 2.2d, 3.3d};
+    Files.write(in.toPath(), lines("_c0:double", Stream.of(data).map(String::valueOf).toArray(String[]::new)));
+
+    final String tableName = generateTemporaryTableName();
+    final ConfigSource config =
+        CONFIG_MAPPER_FACTORY
+            .newConfigSource()
+            .set("type", "snowflake")
+            .set("user", TEST_SNOWFLAKE_USER)
+            .set("password", TEST_SNOWFLAKE_PASSWORD)
+            .set("host", TEST_SNOWFLAKE_HOST)
+            .set("database", TEST_SNOWFLAKE_DB)
+            .set("warehouse", TEST_SNOWFLAKE_WAREHOUSE)
+            .set("schema", TEST_SNOWFLAKE_SCHEMA)
+            .set("mode", "replace")
+            .set("table", tableName);
+    embulk.runOutput(config, in.toPath());
+
+    String fullTableName =
+        String.format("\"%s\".\"%s\".\"%s\"", TEST_SNOWFLAKE_DB, TEST_SNOWFLAKE_SCHEMA, tableName);
+    runQuery(
+        "select count(1) from " + fullTableName,
+        foreachResult(
+            rs -> {
+              assertEquals(data.length, rs.getInt(1));
+            }));
+    List<Double> results = new ArrayList();
+    runQuery(
+        "select \"_c0\" from " + fullTableName + " order by 1",
+        foreachResult(
+            rs -> {
+              results.add(rs.getDouble(1));
             }));
     for (int i = 0; i < results.size(); i++) {
       assertEquals(data[i], results.get(i));

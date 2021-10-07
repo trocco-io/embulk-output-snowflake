@@ -1,3 +1,11 @@
+0.4.0 (2021-10-08)
+======================
+* [#21](https://github.com/trocco-io/embulk-output-snowflake/pull/21) Revert [#14](https://github.com/trocco-io/embulk-output-snowflake/pull/14)
+* [#27](https://github.com/trocco-io/embulk-output-snowflake/pull/27) Add an example.
+* [#28](https://github.com/trocco-io/embulk-output-snowflake/pull/28), [#30](https://github.com/trocco-io/embulk-output-snowflake/pull/30) Add tests
+* [#32](https://github.com/trocco-io/embulk-output-snowflake/pull/32) Use embulk-output-jdbc v0.10.2 that fixes the issue [embulk/embulk-output-jdbc#299](https://github.com/embulk/embulk-output-jdbc/issues/299).
+
+
 0.3.3 (2021-09-16)
 ==================
 

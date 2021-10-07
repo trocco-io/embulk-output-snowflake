@@ -354,6 +354,47 @@ public class TestSnowflakeOutputPlugin {
     }
   }
 
+  @Test
+  public void testRuntimeReplaceBooleanTable() throws IOException {
+    File in = testFolder.newFile(SnowflakeUtils.randomString(8) + ".csv");
+    Boolean[] data = new Boolean[] {false, true};
+    Files.write(in.toPath(), lines("_c0:boolean", Stream.of(data).map(String::valueOf).toArray(String[]::new)));
+
+    final String tableName = generateTemporaryTableName();
+    final ConfigSource config =
+        CONFIG_MAPPER_FACTORY
+            .newConfigSource()
+            .set("type", "snowflake")
+            .set("user", TEST_SNOWFLAKE_USER)
+            .set("password", TEST_SNOWFLAKE_PASSWORD)
+            .set("host", TEST_SNOWFLAKE_HOST)
+            .set("database", TEST_SNOWFLAKE_DB)
+            .set("warehouse", TEST_SNOWFLAKE_WAREHOUSE)
+            .set("schema", TEST_SNOWFLAKE_SCHEMA)
+            .set("mode", "replace")
+            .set("table", tableName);
+    embulk.runOutput(config, in.toPath());
+
+    String fullTableName =
+        String.format("\"%s\".\"%s\".\"%s\"", TEST_SNOWFLAKE_DB, TEST_SNOWFLAKE_SCHEMA, tableName);
+    runQuery(
+        "select count(1) from " + fullTableName,
+        foreachResult(
+            rs -> {
+              assertEquals(data.length, rs.getInt(1));
+            }));
+    List<Boolean> results = new ArrayList();
+    runQuery(
+        "select \"_c0\" from " + fullTableName + " order by 1",
+        foreachResult(
+            rs -> {
+              results.add(rs.getBoolean(1));
+            }));
+    for (int i = 0; i < results.size(); i++) {
+      assertEquals(data[i], results.get(i));
+    }
+  }
+
   @Ignore(
       "This test takes so long time because it needs to create more than 1000 tables, so ignored...")
   @Test(expected = Test.None.class /* no exception expected */)

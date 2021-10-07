@@ -276,7 +276,9 @@ public class TestSnowflakeOutputPlugin {
   public void testRuntimeReplaceLongTable() throws IOException {
     File in = testFolder.newFile(SnowflakeUtils.randomString(8) + ".csv");
     Long[] data = new Long[] {1L, 2L, 3L};
-    Files.write(in.toPath(), lines("_c0:long", Stream.of(data).map(String::valueOf).toArray(String[]::new)));
+    Files.write(
+        in.toPath(),
+        lines("_c0:long", Stream.of(data).map(String::valueOf).toArray(String[]::new)));
 
     final String tableName = generateTemporaryTableName();
     final ConfigSource config =
@@ -317,7 +319,9 @@ public class TestSnowflakeOutputPlugin {
   public void testRuntimeReplaceDoubleTable() throws IOException {
     File in = testFolder.newFile(SnowflakeUtils.randomString(8) + ".csv");
     Double[] data = new Double[] {1.1d, 2.2d, 3.3d};
-    Files.write(in.toPath(), lines("_c0:double", Stream.of(data).map(String::valueOf).toArray(String[]::new)));
+    Files.write(
+        in.toPath(),
+        lines("_c0:double", Stream.of(data).map(String::valueOf).toArray(String[]::new)));
 
     final String tableName = generateTemporaryTableName();
     final ConfigSource config =
@@ -358,7 +362,9 @@ public class TestSnowflakeOutputPlugin {
   public void testRuntimeReplaceBooleanTable() throws IOException {
     File in = testFolder.newFile(SnowflakeUtils.randomString(8) + ".csv");
     Boolean[] data = new Boolean[] {false, true};
-    Files.write(in.toPath(), lines("_c0:boolean", Stream.of(data).map(String::valueOf).toArray(String[]::new)));
+    Files.write(
+        in.toPath(),
+        lines("_c0:boolean", Stream.of(data).map(String::valueOf).toArray(String[]::new)));
 
     final String tableName = generateTemporaryTableName();
     final ConfigSource config =

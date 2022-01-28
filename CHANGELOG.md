@@ -1,3 +1,7 @@
+0.4.1 (2022-01-28)
+==================
+* [#35](https://github.com/trocco-io/embulk-output-snowflake/pull/35) bump up snowflake-jdbc version to 3.13.14
+
 0.4.0 (2021-10-08)
 ======================
 * [#21](https://github.com/trocco-io/embulk-output-snowflake/pull/21) Revert [#14](https://github.com/trocco-io/embulk-output-snowflake/pull/14)

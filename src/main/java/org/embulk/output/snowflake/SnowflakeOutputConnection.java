@@ -137,4 +137,18 @@ public class SnowflakeOutputConnection extends JdbcOutputConnection {
     sb.append(".csv.gz");
     return sb.toString();
   }
+
+  // borrow code from jdbc to fix TablIdentifer in doBegin
+  public void executeSql(String sql) throws SQLException
+  {
+      Statement stmt = connection.createStatement();
+      try {
+          executeUpdate(stmt, sql);
+          commitIfNecessary(connection);
+      } catch (SQLException ex) {
+          throw safeRollback(connection, ex);
+      } finally {
+          stmt.close();
+      }
+  }
 }

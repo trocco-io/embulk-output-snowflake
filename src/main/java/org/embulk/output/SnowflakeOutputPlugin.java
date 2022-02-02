@@ -174,8 +174,15 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
     }
     // need to get database name
     SnowflakePluginTask sfTask = (SnowflakePluginTask) task;
-    task.setActualTable(
-        new TableIdentifier(sfTask.getDatabase(), con.getSchemaName(), actualTable));
+
+    System.out.println("Schema:");
+    System.out.println(con.getSchemaName());
+
+    System.out.println("From Config ===========");
+    System.out.println(sfTask.getDatabase());
+    System.out.println(sfTask.getSchema());
+    System.out.println(sfTask.getTable());
+    task.setActualTable(new TableIdentifier(sfTask.getDatabase(), sfTask.getSchema(), actualTable));
 
     Optional<JdbcSchema> initialTargetTableSchema =
         mode.ignoreTargetTableSchema()

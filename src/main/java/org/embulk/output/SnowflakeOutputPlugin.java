@@ -431,6 +431,7 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
     }
   }
 
+  // borrow code from jdbc to fix TablIdentifer in doBegin
   private static RetryExecutor buildRetryExecutor(PluginTask task) {
     return RetryExecutor.retryExecutor()
         .withRetryLimit(task.getRetryLimit())

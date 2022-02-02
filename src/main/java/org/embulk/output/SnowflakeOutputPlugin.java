@@ -13,7 +13,6 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
-
 import org.embulk.config.ConfigDiff;
 import org.embulk.config.ConfigException;
 import org.embulk.config.TaskSource;
@@ -135,8 +134,9 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
   }
 
   @Override
-  protected void doBegin(JdbcOutputConnection con,
-      PluginTask task, final Schema schema, int taskCount) throws SQLException {
+  protected void doBegin(
+      JdbcOutputConnection con, PluginTask task, final Schema schema, int taskCount)
+      throws SQLException {
     if (schema.getColumnCount() == 0) {
       throw new ConfigException("No column.");
     }
@@ -145,7 +145,8 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
     logger.info("Using {} mode", mode);
 
     if (mode.commitBySwapTable() && task.getBeforeLoad().isPresent()) {
-      throw new ConfigException(String.format("%s mode does not support 'before_load' option.", mode));
+      throw new ConfigException(
+          String.format("%s mode does not support 'before_load' option.", mode));
     }
 
     String actualTable;
@@ -156,8 +157,10 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
       String lowerTable = task.getTable().toLowerCase();
       if (con.tableExists(upperTable)) {
         if (con.tableExists(lowerTable)) {
-          throw new ConfigException(String.format("Cannot specify table '%s' because both '%s' and '%s' exist.",
-              task.getTable(), upperTable, lowerTable));
+          throw new ConfigException(
+              String.format(
+                  "Cannot specify table '%s' because both '%s' and '%s' exist.",
+                  task.getTable(), upperTable, lowerTable));
         } else {
           actualTable = upperTable;
         }
@@ -171,25 +174,31 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
     }
     // need to get database name
     SnowflakePluginTask sfTask = (SnowflakePluginTask) task;
-    task.setActualTable(new TableIdentifier(sfTask.getDatabase(), con.getSchemaName(), actualTable));
+    task.setActualTable(
+        new TableIdentifier(sfTask.getDatabase(), con.getSchemaName(), actualTable));
 
-    Optional<JdbcSchema> initialTargetTableSchema = mode.ignoreTargetTableSchema() ? Optional.<JdbcSchema>empty()
-        : newJdbcSchemaFromTableIfExists(con, task.getActualTable());
+    Optional<JdbcSchema> initialTargetTableSchema =
+        mode.ignoreTargetTableSchema()
+            ? Optional.<JdbcSchema>empty()
+            : newJdbcSchemaFromTableIfExists(con, task.getActualTable());
 
     // TODO get CREATE TABLE statement from task if set
-    JdbcSchema newTableSchema = applyColumnOptionsToNewTableSchema(
-        initialTargetTableSchema.orElseGet(new Supplier<JdbcSchema>() {
-          public JdbcSchema get() {
-            return newJdbcSchemaForNewTable(schema);
-          }
-        }),
-        task.getColumnOptions());
+    JdbcSchema newTableSchema =
+        applyColumnOptionsToNewTableSchema(
+            initialTargetTableSchema.orElseGet(
+                new Supplier<JdbcSchema>() {
+                  public JdbcSchema get() {
+                    return newJdbcSchemaForNewTable(schema);
+                  }
+                }),
+            task.getColumnOptions());
 
     // create intermediate tables
     if (!mode.isDirectModify()) {
       // create the intermediate tables here
       task.setIntermediateTables(
-          Optional.<List<TableIdentifier>>of(createIntermediateTables(con, task, taskCount, newTableSchema)));
+          Optional.<List<TableIdentifier>>of(
+              createIntermediateTables(con, task, taskCount, newTableSchema)));
     } else {
       // direct modify mode doesn't need intermediate tables.
       task.setIntermediateTables(Optional.<List<TableIdentifier>>empty());
@@ -205,14 +214,18 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
     if (initialTargetTableSchema.isPresent()) {
       targetTableSchema = initialTargetTableSchema.get();
       task.setNewTableSchema(Optional.<JdbcSchema>empty());
-    } else if (task.getIntermediateTables().isPresent() && !task.getIntermediateTables().get().isEmpty()) {
+    } else if (task.getIntermediateTables().isPresent()
+        && !task.getIntermediateTables().get().isEmpty()) {
       TableIdentifier firstItermTable = task.getIntermediateTables().get().get(0);
       targetTableSchema = newJdbcSchemaFromTableIfExists(con, firstItermTable).get();
       task.setNewTableSchema(Optional.of(newTableSchema));
     } else {
       // also create the target table if not exists
       // CREATE TABLE IF NOT EXISTS xyz
-      con.createTableIfNotExists(task.getActualTable(), newTableSchema, task.getCreateTableConstraint(),
+      con.createTableIfNotExists(
+          task.getActualTable(),
+          newTableSchema,
+          task.getCreateTableConstraint(),
           task.getCreateTableOption());
       targetTableSchema = newJdbcSchemaFromTableIfExists(con, task.getActualTable()).get();
       task.setNewTableSchema(Optional.<JdbcSchema>empty());
@@ -222,7 +235,8 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
     // validate column_options
     newColumnSetters(
         newColumnSetterFactory(null, task.getDefaultTimeZone()), // TODO create a dummy BatchInsert
-        task.getTargetTableSchema(), schema,
+        task.getTargetTableSchema(),
+        schema,
         task.getColumnOptions());
 
     // normalize merge_key parameter for merge modes
@@ -239,7 +253,8 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
         }
         for (String key : mergeKeys.get()) {
           if (!targetTableSchema.findColumn(key).isPresent()) {
-            throw new ConfigException(String.format("Merge key '%s' does not exist in the target table.", key));
+            throw new ConfigException(
+                String.format("Merge key '%s' does not exist in the target table.", key));
           }
         }
       } else {
@@ -272,7 +287,8 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
     SnowflakePluginTask t = (SnowflakePluginTask) task;
     // TODO: put some where executes once
     if (this.stageIdentifier == null) {
-      SnowflakeOutputConnection snowflakeCon = (SnowflakeOutputConnection) getConnector(task, true).connect(true);
+      SnowflakeOutputConnection snowflakeCon =
+          (SnowflakeOutputConnection) getConnector(task, true).connect(true);
       this.stageIdentifier = StageIdentifierHolder.getStageIdentifier(t);
       snowflakeCon.runCreateStage(this.stageIdentifier);
     }
@@ -280,133 +296,157 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
     return new SnowflakeCopyBatchInsert(getConnector(task, true), this.stageIdentifier, false);
   }
 
+  // borrow code from jdbc to fix TablIdentifer in doBegin
+  private static JdbcSchema applyColumnOptionsToNewTableSchema(
+      JdbcSchema schema, final Map<String, JdbcColumnOption> columnOptions) {
+    return new JdbcSchema(
+        schema.getColumns().stream()
+            .map(
+                c -> {
+                  JdbcColumnOption option = columnOptionOf(columnOptions, c.getName());
+                  if (option.getType().isPresent()) {
+                    return JdbcColumn.newTypeDeclaredColumn(
+                        c.getName(),
+                        Types.OTHER, // sqlType, isNotNull, and isUniqueKey are ignored
+                        option.getType().get(),
+                        false,
+                        false);
+                  }
+                  return c;
+                })
+            .collect(Collectors.toList()));
+  }
 
   // borrow code from jdbc to fix TablIdentifer in doBegin
-  private static JdbcSchema applyColumnOptionsToNewTableSchema(JdbcSchema schema, final Map<String, JdbcColumnOption> columnOptions)
-  {
-      return new JdbcSchema(schema.getColumns().stream().map(c -> {
-              JdbcColumnOption option = columnOptionOf(columnOptions, c.getName());
-              if (option.getType().isPresent()) {
-                  return JdbcColumn.newTypeDeclaredColumn(
-                          c.getName(), Types.OTHER,  // sqlType, isNotNull, and isUniqueKey are ignored
-                          option.getType().get(), false, false);
+  private static JdbcColumnOption columnOptionOf(
+      Map<String, JdbcColumnOption> columnOptions, String columnName) {
+    return Optional.ofNullable(columnOptions.get(columnName))
+        .orElseGet(
+            // default column option
+            new Supplier<JdbcColumnOption>() {
+              public JdbcColumnOption get() {
+                return CONFIG_MAPPER.map(
+                    CONFIG_MAPPER_FACTORY.newConfigSource(), JdbcColumnOption.class);
               }
-              return c;
-          }).collect(Collectors.toList()));
+            });
   }
 
   // borrow code from jdbc to fix TablIdentifer in doBegin
-  private static JdbcColumnOption columnOptionOf(Map<String, JdbcColumnOption> columnOptions, String columnName)
-  {
-      return Optional.ofNullable(columnOptions.get(columnName)).orElseGet(
-                  // default column option
-                  new Supplier<JdbcColumnOption>()
-                  {
-                      public JdbcColumnOption get()
-                      {
-                          return CONFIG_MAPPER.map(CONFIG_MAPPER_FACTORY.newConfigSource(), JdbcColumnOption.class);
-                      }
-                  });
-  }
-
-  // borrow code from jdbc to fix TablIdentifer in doBegin
-  private List<TableIdentifier> createIntermediateTables(final JdbcOutputConnection con,
-            final PluginTask task, final int taskCount, final JdbcSchema newTableSchema) throws SQLException
-    {
-        try {
-            return buildRetryExecutor(task).run(new Retryable<List<TableIdentifier>>() {
+  private List<TableIdentifier> createIntermediateTables(
+      final JdbcOutputConnection con,
+      final PluginTask task,
+      final int taskCount,
+      final JdbcSchema newTableSchema)
+      throws SQLException {
+    try {
+      return buildRetryExecutor(task)
+          .run(
+              new Retryable<List<TableIdentifier>>() {
                 private TableIdentifier table;
                 private ArrayList<TableIdentifier> intermTables;
 
                 @Override
-                public List<TableIdentifier> call() throws Exception
-                {
-                    intermTables = new ArrayList<>();
-                    if (task.getMode().tempTablePerTask()) {
-                        String tableNameFormat = generateIntermediateTableNameFormat(task.getActualTable().getTableName(), con, taskCount,
-                                task.getFeatures().getMaxTableNameLength(), task.getFeatures().getTableNameLengthSemantics());
-                        for (int taskIndex = 0; taskIndex < taskCount; taskIndex++) {
-                            String tableName = String.format(tableNameFormat, taskIndex);
-                            table = buildIntermediateTableId(con, task, tableName);
-                            // if table already exists, SQLException will be thrown
-                            con.createTable(table, newTableSchema, task.getCreateTableConstraint(), task.getCreateTableOption());
-                            intermTables.add(table);
-                        }
-                    } else {
-                        String tableName = generateIntermediateTableNamePrefix(task.getActualTable().getTableName(), con, 0,
-                                task.getFeatures().getMaxTableNameLength(), task.getFeatures().getTableNameLengthSemantics());
-                        table = buildIntermediateTableId(con, task, tableName);
-                        con.createTable(table, newTableSchema, task.getCreateTableConstraint(), task.getCreateTableOption());
-                        intermTables.add(table);
+                public List<TableIdentifier> call() throws Exception {
+                  intermTables = new ArrayList<>();
+                  if (task.getMode().tempTablePerTask()) {
+                    String tableNameFormat =
+                        generateIntermediateTableNameFormat(
+                            task.getActualTable().getTableName(),
+                            con,
+                            taskCount,
+                            task.getFeatures().getMaxTableNameLength(),
+                            task.getFeatures().getTableNameLengthSemantics());
+                    for (int taskIndex = 0; taskIndex < taskCount; taskIndex++) {
+                      String tableName = String.format(tableNameFormat, taskIndex);
+                      table = buildIntermediateTableId(con, task, tableName);
+                      // if table already exists, SQLException will be thrown
+                      con.createTable(
+                          table,
+                          newTableSchema,
+                          task.getCreateTableConstraint(),
+                          task.getCreateTableOption());
+                      intermTables.add(table);
                     }
-                    return Collections.unmodifiableList(intermTables);
+                  } else {
+                    String tableName =
+                        generateIntermediateTableNamePrefix(
+                            task.getActualTable().getTableName(),
+                            con,
+                            0,
+                            task.getFeatures().getMaxTableNameLength(),
+                            task.getFeatures().getTableNameLengthSemantics());
+                    table = buildIntermediateTableId(con, task, tableName);
+                    con.createTable(
+                        table,
+                        newTableSchema,
+                        task.getCreateTableConstraint(),
+                        task.getCreateTableOption());
+                    intermTables.add(table);
+                  }
+                  return Collections.unmodifiableList(intermTables);
                 }
 
                 @Override
-                public boolean isRetryableException(Exception exception)
-                {
-                    if (exception instanceof SQLException) {
-                        try {
-                            // true means that creating table failed because the table already exists.
-                            return con.tableExists(table);
-                        } catch (SQLException e) {
-                        }
-                    }
-                    return false;
-                }
-
-                @Override
-                public void onRetry(Exception exception, int retryCount, int retryLimit, int retryWait)
-                        throws RetryGiveupException
-                {
-                    logger.info("Try to create intermediate tables again because already exist");
+                public boolean isRetryableException(Exception exception) {
+                  if (exception instanceof SQLException) {
                     try {
-                        dropTables();
+                      // true means that creating table failed because the table already exists.
+                      return con.tableExists(table);
                     } catch (SQLException e) {
-                        throw new RetryGiveupException(e);
                     }
+                  }
+                  return false;
+                }
+
+                @Override
+                public void onRetry(
+                    Exception exception, int retryCount, int retryLimit, int retryWait)
+                    throws RetryGiveupException {
+                  logger.info("Try to create intermediate tables again because already exist");
+                  try {
+                    dropTables();
+                  } catch (SQLException e) {
+                    throw new RetryGiveupException(e);
+                  }
                 }
 
                 @Override
                 public void onGiveup(Exception firstException, Exception lastException)
-                        throws RetryGiveupException
-                {
-                    try {
-                        dropTables();
-                    } catch (SQLException e) {
-                        logger.warn("Cannot delete intermediate table", e);
-                    }
+                    throws RetryGiveupException {
+                  try {
+                    dropTables();
+                  } catch (SQLException e) {
+                    logger.warn("Cannot delete intermediate table", e);
+                  }
                 }
 
-                private void dropTables() throws SQLException
-                {
-                    for (TableIdentifier table : intermTables) {
-                        con.dropTableIfExists(table);
-                    }
+                private void dropTables() throws SQLException {
+                  for (TableIdentifier table : intermTables) {
+                    con.dropTableIfExists(table);
+                  }
                 }
-            });
-        } catch (RetryGiveupException e) {
-            throw new RuntimeException(e);
-        }
+              });
+    } catch (RetryGiveupException e) {
+      throw new RuntimeException(e);
     }
-    private static RetryExecutor buildRetryExecutor(PluginTask task) {
-      return RetryExecutor.retryExecutor()
-              .withRetryLimit(task.getRetryLimit())
-              .withInitialRetryWait(task.getRetryWait())
-              .withMaxRetryWait(task.getMaxRetryWait());
+  }
+
+  private static RetryExecutor buildRetryExecutor(PluginTask task) {
+    return RetryExecutor.retryExecutor()
+        .withRetryLimit(task.getRetryLimit())
+        .withInitialRetryWait(task.getRetryWait())
+        .withMaxRetryWait(task.getMaxRetryWait());
   }
 
   // borrow code from jdbc to fix TablIdentifer in doBegin
-  private JdbcSchema matchSchemaByColumnNames(Schema inputSchema, JdbcSchema targetTableSchema)
-  {
-      final ArrayList<JdbcColumn> jdbcColumns = new ArrayList<>();
+  private JdbcSchema matchSchemaByColumnNames(Schema inputSchema, JdbcSchema targetTableSchema) {
+    final ArrayList<JdbcColumn> jdbcColumns = new ArrayList<>();
 
-      for (Column column : inputSchema.getColumns()) {
-          Optional<JdbcColumn> c = targetTableSchema.findColumn(column.getName());
-          jdbcColumns.add(c.orElse(JdbcColumn.skipColumn()));
-      }
+    for (Column column : inputSchema.getColumns()) {
+      Optional<JdbcColumn> c = targetTableSchema.findColumn(column.getName());
+      jdbcColumns.add(c.orElse(JdbcColumn.skipColumn()));
+    }
 
-      return new JdbcSchema(Collections.unmodifiableList(jdbcColumns));
+    return new JdbcSchema(Collections.unmodifiableList(jdbcColumns));
   }
-
 }

@@ -1,3 +1,7 @@
+0.4.2 (2022-01-28)
+==================
+* [#37](https://github.com/trocco-io/embulk-output-snowflake/pull/37) fix duplicate column in the insert mode
+
 0.4.1 (2022-01-28)
 ==================
 * [#35](https://github.com/trocco-io/embulk-output-snowflake/pull/35) bump up snowflake-jdbc version to 3.13.14

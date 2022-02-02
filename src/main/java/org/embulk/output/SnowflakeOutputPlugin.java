@@ -1,18 +1,30 @@
 package org.embulk.output;
 
 import java.io.IOException;
+import java.sql.DatabaseMetaData;
+import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.Set;
+
 import org.embulk.config.ConfigDiff;
 import org.embulk.config.TaskSource;
 import org.embulk.output.jdbc.AbstractJdbcOutputPlugin;
 import org.embulk.output.jdbc.BatchInsert;
+import org.embulk.output.jdbc.JdbcColumn;
 import org.embulk.output.jdbc.JdbcOutputConnection;
 import org.embulk.output.jdbc.JdbcOutputConnector;
+import org.embulk.output.jdbc.JdbcSchema;
+import org.embulk.output.jdbc.JdbcUtils;
 import org.embulk.output.jdbc.MergeConfig;
+import org.embulk.output.jdbc.TableIdentifier;
 import org.embulk.output.snowflake.SnowflakeCopyBatchInsert;
 import org.embulk.output.snowflake.SnowflakeOutputConnection;
 import org.embulk.output.snowflake.SnowflakeOutputConnector;
@@ -135,12 +147,73 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
     SnowflakePluginTask t = (SnowflakePluginTask) task;
     // TODO: put some where executes once
     if (this.stageIdentifier == null) {
-      SnowflakeOutputConnection snowflakeCon =
-          (SnowflakeOutputConnection) getConnector(task, true).connect(true);
+      SnowflakeOutputConnection snowflakeCon = (SnowflakeOutputConnection) getConnector(task, true).connect(true);
       this.stageIdentifier = StageIdentifierHolder.getStageIdentifier(t);
       snowflakeCon.runCreateStage(this.stageIdentifier);
     }
 
     return new SnowflakeCopyBatchInsert(getConnector(task, true), this.stageIdentifier, false);
   }
+
+  public Optional<JdbcSchema> newJdbcSchemaFromTableIfExists(JdbcOutputConnection connection,
+      TableIdentifier table) throws SQLException {
+    if (!connection.tableExists(table)) {
+      // DatabaseMetaData.getPrimaryKeys fails if table does not exist
+      return Optional.empty();
+    }
+
+    DatabaseMetaData dbm = connection.getMetaData();
+    String escape = dbm.getSearchStringEscape();
+
+    ResultSet rs = dbm.getPrimaryKeys(table.getDatabase(), table.getSchemaName(), table.getTableName());
+    final HashSet<String> primaryKeysBuilder = new HashSet<>();
+    try {
+      while (rs.next()) {
+        primaryKeysBuilder.add(rs.getString("COLUMN_NAME"));
+      }
+    } finally {
+      rs.close();
+    }
+    final Set<String> primaryKeys = Collections.unmodifiableSet(primaryKeysBuilder);
+
+    final ArrayList<JdbcColumn> builder = new ArrayList<>();
+    logger.info("{}", JdbcUtils.escapeSearchString(table.getDatabase(), escape));
+    logger.info("{}", JdbcUtils.escapeSearchString(table.getSchemaName(), escape));
+    logger.info("{}", JdbcUtils.escapeSearchString(table.getTableName(), escape));
+    rs = dbm.getColumns(
+        JdbcUtils.escapeSearchString(table.getDatabase(), escape),
+        JdbcUtils.escapeSearchString(table.getSchemaName(), escape),
+        JdbcUtils.escapeSearchString(table.getTableName(), escape),
+        null);
+    try {
+      while (rs.next()) {
+        String columnName = rs.getString("COLUMN_NAME");
+        logger.info("{}", columnName);
+        String simpleTypeName = rs.getString("TYPE_NAME").toUpperCase(Locale.ENGLISH);
+        boolean isUniqueKey = primaryKeys.contains(columnName);
+        int sqlType = rs.getInt("DATA_TYPE");
+        int colSize = rs.getInt("COLUMN_SIZE");
+        int decDigit = rs.getInt("DECIMAL_DIGITS");
+        if (rs.wasNull()) {
+          decDigit = -1;
+        }
+        int charOctetLength = rs.getInt("CHAR_OCTET_LENGTH");
+        boolean isNotNull = "NO".equals(rs.getString("IS_NULLABLE"));
+        // rs.getString("COLUMN_DEF") // or null // TODO
+        builder.add(JdbcColumn.newGenericTypeColumn(
+            columnName, sqlType, simpleTypeName, colSize, decDigit, charOctetLength, isNotNull, isUniqueKey));
+        // We can't get declared column name using JDBC API.
+        // Subclasses need to overwrite it.
+      }
+    } finally {
+      rs.close();
+    }
+    final List<JdbcColumn> columns = Collections.unmodifiableList(builder);
+    if (columns.isEmpty()) {
+      return Optional.empty();
+    } else {
+      return Optional.of(new JdbcSchema(columns));
+    }
+  }
+
 }

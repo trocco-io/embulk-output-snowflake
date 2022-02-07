@@ -88,6 +88,13 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
     props.setProperty("db", t.getDatabase());
     props.setProperty("schema", t.getSchema());
 
+    // When CLIENT_METADATA_REQUEST_USE_CONNECTION_CTX is false (default),
+    // getMetaData().getColumns() returns columns of the tables which table name is
+    // same in all databases.
+    // So, set this parameter true.
+    // https://github.com/snowflakedb/snowflake-jdbc/blob/032bdceb408ebeedb1a9ad4edd9ee6cf7c6bb470/src/main/java/net/snowflake/client/jdbc/SnowflakeDatabaseMetaData.java#L1261-L1269
+    props.setProperty("CLIENT_METADATA_REQUEST_USE_CONNECTION_CTX", "true");
+
     props.putAll(t.getOptions());
 
     logConnectionProperties(url, props);
@@ -135,8 +142,7 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
     SnowflakePluginTask t = (SnowflakePluginTask) task;
     // TODO: put some where executes once
     if (this.stageIdentifier == null) {
-      SnowflakeOutputConnection snowflakeCon =
-          (SnowflakeOutputConnection) getConnector(task, true).connect(true);
+      SnowflakeOutputConnection snowflakeCon = (SnowflakeOutputConnection) getConnector(task, true).connect(true);
       this.stageIdentifier = StageIdentifierHolder.getStageIdentifier(t);
       snowflakeCon.runCreateStage(this.stageIdentifier);
     }

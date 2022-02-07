@@ -88,6 +88,8 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
     props.setProperty("db", t.getDatabase());
     props.setProperty("schema", t.getSchema());
 
+    props.setProperty("CLIENT_METADATA_REQUEST_USE_CONNECTION_CTX", "true");
+
     props.putAll(t.getOptions());
 
     logConnectionProperties(url, props);
@@ -135,8 +137,7 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
     SnowflakePluginTask t = (SnowflakePluginTask) task;
     // TODO: put some where executes once
     if (this.stageIdentifier == null) {
-      SnowflakeOutputConnection snowflakeCon =
-          (SnowflakeOutputConnection) getConnector(task, true).connect(true);
+      SnowflakeOutputConnection snowflakeCon = (SnowflakeOutputConnection) getConnector(task, true).connect(true);
       this.stageIdentifier = StageIdentifierHolder.getStageIdentifier(t);
       snowflakeCon.runCreateStage(this.stageIdentifier);
     }

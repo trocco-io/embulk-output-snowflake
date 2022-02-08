@@ -1,3 +1,7 @@
+0.4.3 (2022-02-08)
+* [#40](https://github.com/trocco-io/embulk-output-snowflake/pull/40) revert #37
+* [#41](https://github.com/trocco-io/embulk-output-snowflake/pull/41) set CLIENT_METADATA_REQUEST_USE_CONNECTION_CTX=true
+
 0.4.2 (2022-01-28)
 ==================
 * [#37](https://github.com/trocco-io/embulk-output-snowflake/pull/37) fix duplicate column in the insert mode

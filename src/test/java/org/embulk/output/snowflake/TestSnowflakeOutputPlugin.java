@@ -72,6 +72,8 @@ public class TestSnowflakeOutputPlugin {
   private static final TaskMapper TASK_MAPPER = CONFIG_MAPPER_FACTORY.createTaskMapper();
   private static final String TEST_TABLE_PREFIX =
       String.format("test_%d_", System.currentTimeMillis());
+  private static final String TEST_DB_SUFFIX =
+      String.format("_test_%d", System.currentTimeMillis());
 
   private Logger logger = LoggerFactory.getLogger(TestSnowflakeOutputPlugin.class);
 
@@ -164,9 +166,27 @@ public class TestSnowflakeOutputPlugin {
             }));
   }
 
+  private String generateTemporaryDatabaseName() {
+    return TEST_SNOWFLAKE_DB + TEST_DB_SUFFIX + UUID.randomUUID().toString().replace("-", "");
+  }
+
+  private void dropAllTemporaryDatabases() {
+    runQuery(
+        String.format("show databases like '%s%%'", TEST_SNOWFLAKE_DB + TEST_DB_SUFFIX),
+        foreachResult(
+            rs -> {
+              String databaseName = rs.getString("name");
+
+              runQuery(
+                  String.format("drop database if exists \"%s\"", databaseName),
+                  foreachResult(rs_ -> {}));
+            }));
+  }
+
   @After
   public void after() {
     dropAllTemporaryTables();
+    dropAllTemporaryDatabases();
   }
 
   @Test
@@ -265,6 +285,58 @@ public class TestSnowflakeOutputPlugin {
     for (int i = 0; i < results.size(); i++) {
       assertEquals(lines.get(i + 1).split(",")[1], results.get(i));
     }
+  }
+
+  @Test
+  public void testRuntimeInsertStringTable() throws IOException {
+    File in = testFolder.newFile(SnowflakeUtils.randomString(8) + ".csv");
+    List<String> lines =
+        Stream.of("c0:double,c1:string", "0.0,aaa", "0.1,bbb", "1.2,ccc")
+            .collect(Collectors.toList());
+    Files.write(in.toPath(), lines);
+
+    // When multiple databases which have tables of same name exists, this plugin had a bug to try
+    // to create invalid temporary tables.
+    // So I added the test case for that.
+    // ref: https://github.com/trocco-io/embulk-output-snowflake/pull/41
+
+    final String anotherDbName = generateTemporaryDatabaseName();
+    runQuery(String.format("create database \"%s\"", anotherDbName), foreachResult(rs_ -> {}));
+
+    final String tableName = generateTemporaryTableName();
+    String anotherDBFullTableName =
+        String.format("\"%s\".\"%s\".\"%s\"", anotherDbName, TEST_SNOWFLAKE_SCHEMA, tableName);
+    runQuery(
+        String.format("create table %s (c0 FLOAT, c1 STRING)", anotherDBFullTableName),
+        foreachResult(rs_ -> {}));
+
+    String fullTableName =
+        String.format("\"%s\".\"%s\".\"%s\"", TEST_SNOWFLAKE_DB, TEST_SNOWFLAKE_SCHEMA, tableName);
+
+    runQuery(
+        String.format("create table %s (c0 FLOAT, c1 STRING)", fullTableName),
+        foreachResult(rs_ -> {}));
+
+    final ConfigSource config =
+        CONFIG_MAPPER_FACTORY
+            .newConfigSource()
+            .set("type", "snowflake")
+            .set("user", TEST_SNOWFLAKE_USER)
+            .set("password", TEST_SNOWFLAKE_PASSWORD)
+            .set("host", TEST_SNOWFLAKE_HOST)
+            .set("database", TEST_SNOWFLAKE_DB)
+            .set("warehouse", TEST_SNOWFLAKE_WAREHOUSE)
+            .set("schema", TEST_SNOWFLAKE_SCHEMA)
+            .set("mode", "insert")
+            .set("table", tableName);
+    embulk.runOutput(config, in.toPath());
+
+    runQuery(
+        "select count(1) from " + fullTableName,
+        foreachResult(
+            rs -> {
+              assertEquals(3, rs.getInt(1));
+            }));
   }
 
   @Ignore(

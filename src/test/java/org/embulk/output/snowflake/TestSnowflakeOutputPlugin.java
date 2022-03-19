@@ -342,7 +342,6 @@ public class TestSnowflakeOutputPlugin {
                     .set("schema", TEST_SNOWFLAKE_SCHEMA)
                     .set("mode", "replace")
                     .set("table", targetTableName)
-                    .set("MULTI_STATEMENT_COUNT", "0")
             ;
     embulk.runOutput(config, in.toPath());
 

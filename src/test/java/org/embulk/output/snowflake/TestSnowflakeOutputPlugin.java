@@ -357,6 +357,16 @@ public class TestSnowflakeOutputPlugin {
                     temporaryTableFullName
             )
     );
+
+    runQuery(
+            String.format(
+                    "select count(*) from %s;",
+                    targetTableFullName
+            ),
+            foreachResult(rs -> {
+              assertEquals(6, rs.getInt(1));
+            })
+    );
   }
 
   @Test

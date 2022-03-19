@@ -101,6 +101,7 @@ public class TestSnowflakeOutputPlugin {
     props.setProperty("warehouse", TEST_SNOWFLAKE_WAREHOUSE);
     props.setProperty("db", TEST_SNOWFLAKE_DB);
     props.setProperty("schema", TEST_SNOWFLAKE_SCHEMA);
+    props.setProperty("MULTI_STATEMENT_COUNT", "0");
     TEST_PROPERTIES = props;
   }
 

@@ -146,8 +146,7 @@ public class TestSnowflakeOutputPlugin {
     }
     String uri = String.format("jdbc:snowflake://%s", TEST_PROPERTIES.getProperty("host"));
     try (Connection conn = DriverManager.getConnection(uri, TEST_PROPERTIES);
-         Statement stmt = conn.createStatement()
-    ) {
+        Statement stmt = conn.createStatement()) {
       stmt.executeUpdate(query);
     } catch (SQLException e) {
       throw new RuntimeException(e);
@@ -310,62 +309,54 @@ public class TestSnowflakeOutputPlugin {
   public void testExecuteMultiQuery() throws IOException {
     File in = testFolder.newFile(SnowflakeUtils.randomString(8) + ".csv");
     List<String> lines =
-            Stream.of("c0:double, c1:string", "0.0,aaa", "0.1,bbb", "1.2,ccc")
-                    .collect(Collectors.toList());
+        Stream.of("c0:double, c1:string", "0.0,aaa", "0.1,bbb", "1.2,ccc")
+            .collect(Collectors.toList());
     Files.write(in.toPath(), lines);
 
     String targetTableName = generateTemporaryTableName();
     String targetTableFullName =
-            String.format("\"%s\".\"%s\".\"%s\"", TEST_SNOWFLAKE_DB, TEST_SNOWFLAKE_SCHEMA, targetTableName);
+        String.format(
+            "\"%s\".\"%s\".\"%s\"", TEST_SNOWFLAKE_DB, TEST_SNOWFLAKE_SCHEMA, targetTableName);
     runQuery(
-            String.format("create table %s (c0 FLOAT, c1 STRING)", targetTableFullName),
-            foreachResult(rs_ -> {})
-    );
+        String.format("create table %s (c0 FLOAT, c1 STRING)", targetTableFullName),
+        foreachResult(rs_ -> {}));
 
     String temporaryTableName = generateTemporaryTableName();
     String temporaryTableFullName =
-            String.format("\"%s\".\"%s\".\"%s\"", TEST_SNOWFLAKE_DB, TEST_SNOWFLAKE_SCHEMA, temporaryTableName);
+        String.format(
+            "\"%s\".\"%s\".\"%s\"", TEST_SNOWFLAKE_DB, TEST_SNOWFLAKE_SCHEMA, temporaryTableName);
     runQuery(
-            String.format("create table %s (c0 FLOAT, c1 STRING)", temporaryTableFullName),
-            foreachResult(rs_ -> {})
-    );
+        String.format("create table %s (c0 FLOAT, c1 STRING)", temporaryTableFullName),
+        foreachResult(rs_ -> {}));
 
     final ConfigSource config =
-            CONFIG_MAPPER_FACTORY
-                    .newConfigSource()
-                    .set("type", "snowflake")
-                    .set("user", TEST_SNOWFLAKE_USER)
-                    .set("password", TEST_SNOWFLAKE_PASSWORD)
-                    .set("host", TEST_SNOWFLAKE_HOST)
-                    .set("database", TEST_SNOWFLAKE_DB)
-                    .set("warehouse", TEST_SNOWFLAKE_WAREHOUSE)
-                    .set("schema", TEST_SNOWFLAKE_SCHEMA)
-                    .set("mode", "replace")
-                    .set("table", targetTableName)
-            ;
+        CONFIG_MAPPER_FACTORY
+            .newConfigSource()
+            .set("type", "snowflake")
+            .set("user", TEST_SNOWFLAKE_USER)
+            .set("password", TEST_SNOWFLAKE_PASSWORD)
+            .set("host", TEST_SNOWFLAKE_HOST)
+            .set("database", TEST_SNOWFLAKE_DB)
+            .set("warehouse", TEST_SNOWFLAKE_WAREHOUSE)
+            .set("schema", TEST_SNOWFLAKE_SCHEMA)
+            .set("mode", "replace")
+            .set("table", targetTableName);
     embulk.runOutput(config, in.toPath());
 
     config.set("table", temporaryTableName);
     embulk.runOutput(config, in.toPath());
 
     runUpdateQuery(
-            String.format(
-                    "insert into %s select * from %s; drop table %s;",
-                    targetTableFullName,
-                    temporaryTableFullName,
-                    temporaryTableFullName
-            )
-    );
+        String.format(
+            "insert into %s select * from %s; drop table %s;",
+            targetTableFullName, temporaryTableFullName, temporaryTableFullName));
 
     runQuery(
-            String.format(
-                    "select count(*) from %s;",
-                    targetTableFullName
-            ),
-            foreachResult(rs -> {
+        String.format("select count(*) from %s;", targetTableFullName),
+        foreachResult(
+            rs -> {
               assertEquals(6, rs.getInt(1));
-            })
-    );
+            }));
   }
 
   @Test

@@ -318,17 +318,19 @@ public class TestSnowflakeOutputPlugin {
             .set("schema", TEST_SNOWFLAKE_SCHEMA)
             .set("mode", "replace")
             .set("table", temporaryTableName)
-            .set("after_load",
-                    String.format("insert into \"%s\" select * from \"%s\"; drop table \"%s\";",
-                            targetTableName, temporaryTableName, temporaryTableName));
+            .set(
+                "after_load",
+                String.format(
+                    "insert into \"%s\" select * from \"%s\"; drop table \"%s\";",
+                    targetTableName, temporaryTableName, temporaryTableName));
     embulk.runOutput(config, in.toPath());
 
     runQuery(
-            String.format("select count(*) from %s;", targetTableFullName),
-            foreachResult(
-                    rs -> {
-                      assertEquals(3, rs.getInt(1));
-                    }));
+        String.format("select count(*) from %s;", targetTableFullName),
+        foreachResult(
+            rs -> {
+              assertEquals(3, rs.getInt(1));
+            }));
   }
 
   @Test

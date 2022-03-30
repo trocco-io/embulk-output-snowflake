@@ -322,12 +322,6 @@ public class TestSnowflakeOutputPlugin {
         foreachResult(rs_ -> {}));
 
     String temporaryTableName = generateTemporaryTableName();
-    String temporaryTableFullName =
-        String.format(
-            "\"%s\".\"%s\".\"%s\"", TEST_SNOWFLAKE_DB, TEST_SNOWFLAKE_SCHEMA, temporaryTableName);
-    runQuery(
-        String.format("create table %s (c0 FLOAT, c1 STRING)", temporaryTableFullName),
-        foreachResult(rs_ -> {}));
 
     final ConfigSource config =
         CONFIG_MAPPER_FACTORY
@@ -340,23 +334,18 @@ public class TestSnowflakeOutputPlugin {
             .set("warehouse", TEST_SNOWFLAKE_WAREHOUSE)
             .set("schema", TEST_SNOWFLAKE_SCHEMA)
             .set("mode", "replace")
-            .set("table", targetTableName);
+            .set("table", temporaryTableName)
+            .set("after_load",
+                    String.format("insert into \"%s\" select * from \"%s\"; drop table \"%s\";",
+                            targetTableName, temporaryTableName, temporaryTableName));
     embulk.runOutput(config, in.toPath());
-
-    config.set("table", temporaryTableName);
-    embulk.runOutput(config, in.toPath());
-
-    runUpdateQuery(
-        String.format(
-            "insert into %s select * from %s; drop table %s;",
-            targetTableFullName, temporaryTableFullName, temporaryTableFullName));
 
     runQuery(
-        String.format("select count(*) from %s;", targetTableFullName),
-        foreachResult(
-            rs -> {
-              assertEquals(6, rs.getInt(1));
-            }));
+            String.format("select count(*) from %s;", targetTableFullName),
+            foreachResult(
+                    rs -> {
+                      assertEquals(3, rs.getInt(1));
+                    }));
   }
 
   @Test

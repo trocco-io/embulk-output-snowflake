@@ -94,6 +94,7 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
     // So, set this parameter true.
     // https://github.com/snowflakedb/snowflake-jdbc/blob/032bdceb408ebeedb1a9ad4edd9ee6cf7c6bb470/src/main/java/net/snowflake/client/jdbc/SnowflakeDatabaseMetaData.java#L1261-L1269
     props.setProperty("CLIENT_METADATA_REQUEST_USE_CONNECTION_CTX", "true");
+    props.setProperty("MULTI_STATEMENT_COUNT", "0");
 
     props.putAll(t.getOptions());
 

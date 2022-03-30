@@ -101,6 +101,7 @@ public class TestSnowflakeOutputPlugin {
     props.setProperty("warehouse", TEST_SNOWFLAKE_WAREHOUSE);
     props.setProperty("db", TEST_SNOWFLAKE_DB);
     props.setProperty("schema", TEST_SNOWFLAKE_SCHEMA);
+    props.setProperty("MULTI_STATEMENT_COUNT", "0");
     TEST_PROPERTIES = props;
   }
 
@@ -285,6 +286,51 @@ public class TestSnowflakeOutputPlugin {
     for (int i = 0; i < results.size(); i++) {
       assertEquals(lines.get(i + 1).split(",")[1], results.get(i));
     }
+  }
+
+  @Test
+  public void testExecuteMultiQuery() throws IOException {
+    File in = testFolder.newFile(SnowflakeUtils.randomString(8) + ".csv");
+    List<String> lines =
+        Stream.of("c0:double, c1:string", "0.0,aaa", "0.1,bbb", "1.2,ccc")
+            .collect(Collectors.toList());
+    Files.write(in.toPath(), lines);
+
+    String targetTableName = generateTemporaryTableName();
+    String targetTableFullName =
+        String.format(
+            "\"%s\".\"%s\".\"%s\"", TEST_SNOWFLAKE_DB, TEST_SNOWFLAKE_SCHEMA, targetTableName);
+    runQuery(
+        String.format("create table %s (c0 FLOAT, c1 STRING)", targetTableFullName),
+        foreachResult(rs_ -> {}));
+
+    String temporaryTableName = generateTemporaryTableName();
+
+    final ConfigSource config =
+        CONFIG_MAPPER_FACTORY
+            .newConfigSource()
+            .set("type", "snowflake")
+            .set("user", TEST_SNOWFLAKE_USER)
+            .set("password", TEST_SNOWFLAKE_PASSWORD)
+            .set("host", TEST_SNOWFLAKE_HOST)
+            .set("database", TEST_SNOWFLAKE_DB)
+            .set("warehouse", TEST_SNOWFLAKE_WAREHOUSE)
+            .set("schema", TEST_SNOWFLAKE_SCHEMA)
+            .set("mode", "replace")
+            .set("table", temporaryTableName)
+            .set(
+                "after_load",
+                String.format(
+                    "insert into \"%s\" select * from \"%s\"; drop table \"%s\";",
+                    targetTableName, temporaryTableName, temporaryTableName));
+    embulk.runOutput(config, in.toPath());
+
+    runQuery(
+        String.format("select count(*) from %s;", targetTableFullName),
+        foreachResult(
+            rs -> {
+              assertEquals(3, rs.getInt(1));
+            }));
   }
 
   @Test

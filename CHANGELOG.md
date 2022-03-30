@@ -1,4 +1,10 @@
+0.4.4 (2022-03-30)
+* [#43](https://github.com/trocco-io/embulk-output-snowflake/pull/43) fix lint #43
+* [#44](https://github.com/trocco-io/embulk-output-snowflake/pull/44) add test in case of another db which has same table exists #44
+* [#45](https://github.com/trocco-io/embulk-output-snowflake/pull/45) allow multi query #45
+
 0.4.3 (2022-02-08)
+==================
 * [#40](https://github.com/trocco-io/embulk-output-snowflake/pull/40) revert #37
 * [#41](https://github.com/trocco-io/embulk-output-snowflake/pull/41) set CLIENT_METADATA_REQUEST_USE_CONNECTION_CTX=true
 

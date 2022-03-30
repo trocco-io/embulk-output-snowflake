@@ -136,23 +136,6 @@ public class TestSnowflakeOutputPlugin {
     }
   }
 
-  // insert／update／delete
-  private void runUpdateQuery(String query) {
-    // load driver
-    try {
-      Class.forName("net.snowflake.client.jdbc.SnowflakeDriver");
-    } catch (ClassNotFoundException e) {
-      throw new RuntimeException(e);
-    }
-    String uri = String.format("jdbc:snowflake://%s", TEST_PROPERTIES.getProperty("host"));
-    try (Connection conn = DriverManager.getConnection(uri, TEST_PROPERTIES);
-        Statement stmt = conn.createStatement()) {
-      stmt.executeUpdate(query);
-    } catch (SQLException e) {
-      throw new RuntimeException(e);
-    }
-  }
-
   private ThrowableConsumer<ResultSet> foreachResult(ThrowableConsumer<ResultSet> f) {
     return rs -> {
       try {

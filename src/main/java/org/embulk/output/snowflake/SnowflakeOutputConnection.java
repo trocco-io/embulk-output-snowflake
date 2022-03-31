@@ -31,6 +31,7 @@ public class SnowflakeOutputConnection extends JdbcOutputConnection {
 
   public void runDropStage(StageIdentifier stageIdentifier) throws SQLException {
     String sql = buildDropStageSQL(stageIdentifier);
+    System.out.println(sql);
     runUpdate(sql);
   }
 
@@ -85,7 +86,7 @@ public class SnowflakeOutputConnection extends JdbcOutputConnection {
 
   protected String buildDropStageSQL(StageIdentifier stageIdentifier) {
     StringBuilder sb = new StringBuilder();
-    sb.append("DROP STAGE ");
+    sb.append("DROP STAGE IF EXISTS ");
     quoteStageIdentifier(sb, stageIdentifier);
     sb.append(";");
     return sb.toString();

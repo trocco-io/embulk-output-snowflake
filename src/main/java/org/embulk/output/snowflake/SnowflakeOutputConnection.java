@@ -31,7 +31,6 @@ public class SnowflakeOutputConnection extends JdbcOutputConnection {
 
   public void runDropStage(StageIdentifier stageIdentifier) throws SQLException {
     String sql = buildDropStageSQL(stageIdentifier);
-    System.out.println(sql);
     runUpdate(sql);
   }
 

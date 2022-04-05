@@ -1,3 +1,6 @@
+0.4.5 (2022-04-05)
+* [#47](https://github.com/trocco-io/embulk-output-snowflake/pull/47) Fix drop stage not exists
+
 0.4.4 (2022-03-30)
 * [#43](https://github.com/trocco-io/embulk-output-snowflake/pull/43) fix lint #43
 * [#44](https://github.com/trocco-io/embulk-output-snowflake/pull/44) add test in case of another db which has same table exists #44

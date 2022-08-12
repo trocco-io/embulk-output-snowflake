@@ -30,6 +30,9 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
   private SnowflakeOutputConnection connection = null;
   private TableIdentifier tableIdentifier = null;
   protected File currentFile;
+
+  private int batchWeight;
+
   protected BufferedWriter writer;
   protected int index;
   protected int batchRows;
@@ -84,18 +87,14 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
   }
 
   public int getBatchWeight() {
-    long fsize = currentFile.length();
-    if (fsize > Integer.MAX_VALUE) {
-      return Integer.MAX_VALUE;
-    } else {
-      return (int) fsize;
-    }
+    return batchWeight;
   }
 
   public void add() throws IOException {
     writer.write(newLineString);
     batchRows++;
     index = 0;
+    batchWeight += 32;
   }
 
   private void appendDelimiter() throws IOException {
@@ -108,61 +107,73 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
   public void setNull(int sqlType) throws IOException {
     appendDelimiter();
     writer.write(nullString);
+    nextColumn(0);
   }
 
   public void setBoolean(boolean v) throws IOException {
     appendDelimiter();
     writer.write(String.valueOf(v));
+    nextColumn(1);
   }
 
   public void setByte(byte v) throws IOException {
     appendDelimiter();
     setEscapedString(String.valueOf(v));
+    nextColumn(1);
   }
 
   public void setShort(short v) throws IOException {
     appendDelimiter();
     writer.write(String.valueOf(v));
+    nextColumn(2);
   }
 
   public void setInt(int v) throws IOException {
     appendDelimiter();
     writer.write(String.valueOf(v));
+    nextColumn(4);
   }
 
   public void setLong(long v) throws IOException {
     appendDelimiter();
     writer.write(String.valueOf(v));
+    nextColumn(8);
   }
 
   public void setFloat(float v) throws IOException {
     appendDelimiter();
     writer.write(String.valueOf(v));
+    nextColumn(4);
   }
 
   public void setDouble(double v) throws IOException {
     appendDelimiter();
     writer.write(String.valueOf(v));
+    nextColumn(8);
   }
 
   public void setBigDecimal(BigDecimal v) throws IOException {
     appendDelimiter();
     writer.write(String.valueOf(v));
+    nextColumn((v.precision() & ~2) / 2 + 8);
   }
 
   public void setString(String v) throws IOException {
     appendDelimiter();
     setEscapedString(v);
+    nextColumn(v.length() * 2 + 4);
   }
 
   public void setNString(String v) throws IOException {
     appendDelimiter();
     setEscapedString(v);
+    nextColumn(v.length() * 2 + 4);
   }
 
   public void setBytes(byte[] v) throws IOException {
     appendDelimiter();
     setEscapedString(String.valueOf(v));
+    nextColumn(v.length + 4);
   }
 
   @Override
@@ -177,6 +188,7 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
             cal.get(Calendar.MONTH) + 1,
             cal.get(Calendar.DAY_OF_MONTH));
     writer.write(f);
+    nextColumn(32);
   }
 
   @Override
@@ -192,6 +204,11 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
             cal.get(Calendar.SECOND),
             v.getNano() / 1000);
     writer.write(f);
+    nextColumn(32);
+  }
+
+  private void nextColumn(int weight) {
+    batchWeight += weight + 4; // add weight as overhead of each columns
   }
 
   @Override
@@ -219,12 +236,14 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
             v.getNano() / 1000,
             offset);
     writer.write(f);
+    nextColumn(32);
   }
 
   private void setEscapedString(String v) throws IOException {
     for (char c : v.toCharArray()) {
       writer.write(escape(c));
     }
+    nextColumn(v.length() * 2 + 4);
   }
 
   @Override
@@ -244,6 +263,7 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
     fileCount++;
     totalRows += batchRows;
     batchRows = 0;
+    batchWeight = 0;
 
     openNewFile();
   }

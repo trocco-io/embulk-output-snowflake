@@ -30,12 +30,10 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
   private SnowflakeOutputConnection connection = null;
   private TableIdentifier tableIdentifier = null;
   protected File currentFile;
-
-  private int batchWeight;
-
   protected BufferedWriter writer;
   protected int index;
   protected int batchRows;
+  private int batchWeight;
   private long totalRows;
   private int fileCount;
   private List<Future<Void>> uploadAndCopyFutures;

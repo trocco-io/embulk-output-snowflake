@@ -151,4 +151,19 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
 
     return new SnowflakeCopyBatchInsert(getConnector(task, true), this.stageIdentifier, false);
   }
+
+  @Override
+  protected void logConnectionProperties(String url, Properties props) {
+    Properties maskedProps = new Properties();
+    for (String key : props.stringPropertyNames()) {
+      if (key.equals("password")) {
+        maskedProps.setProperty(key, "***");
+      } else if (key.equals("proxyPassword")) {
+        maskedProps.setProperty(key, "***");
+      } else {
+        maskedProps.setProperty(key, props.getProperty(key));
+      }
+    }
+    logger.info("Connecting to {} options {}", url, maskedProps);
+  }
 }

@@ -2,22 +2,18 @@ package org.embulk.output;
 
 import java.io.IOException;
 import java.sql.SQLException;
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.Optional;
-import java.util.Properties;
+import java.sql.Types;
+import java.util.*;
 import org.embulk.config.ConfigDiff;
 import org.embulk.config.TaskSource;
-import org.embulk.output.jdbc.AbstractJdbcOutputPlugin;
-import org.embulk.output.jdbc.BatchInsert;
-import org.embulk.output.jdbc.JdbcOutputConnection;
-import org.embulk.output.jdbc.JdbcOutputConnector;
-import org.embulk.output.jdbc.MergeConfig;
+import org.embulk.output.jdbc.*;
 import org.embulk.output.snowflake.SnowflakeCopyBatchInsert;
 import org.embulk.output.snowflake.SnowflakeOutputConnection;
 import org.embulk.output.snowflake.SnowflakeOutputConnector;
 import org.embulk.output.snowflake.StageIdentifier;
 import org.embulk.output.snowflake.StageIdentifierHolder;
+import org.embulk.spi.Column;
+import org.embulk.spi.ColumnVisitor;
 import org.embulk.spi.OutputPlugin;
 import org.embulk.spi.Schema;
 import org.embulk.util.config.Config;
@@ -165,5 +161,72 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
       }
     }
     logger.info("Connecting to {} options {}", url, maskedProps);
+  }
+
+  // TODO This is almost copy from AbstractJdbcOutputPlugin excepting type of JSON -> OBJECT
+  //      AbstractJdbcOutputPlugin should have better extensibility.
+  @Override
+  protected JdbcSchema newJdbcSchemaForNewTable(Schema schema) {
+    final ArrayList<JdbcColumn> columns = new ArrayList<>();
+    for (Column c : schema.getColumns()) {
+      final String columnName = c.getName();
+      c.visit(
+          new ColumnVisitor() {
+            public void booleanColumn(Column column) {
+              columns.add(
+                  JdbcColumn.newGenericTypeColumn(
+                      columnName, Types.BOOLEAN, "BOOLEAN", 1, 0, false, false));
+            }
+
+            public void longColumn(Column column) {
+              columns.add(
+                  JdbcColumn.newGenericTypeColumn(
+                      columnName, Types.BIGINT, "BIGINT", 22, 0, false, false));
+            }
+
+            public void doubleColumn(Column column) {
+              columns.add(
+                  JdbcColumn.newGenericTypeColumn(
+                      columnName, Types.FLOAT, "DOUBLE PRECISION", 24, 0, false, false));
+            }
+
+            public void stringColumn(Column column) {
+              columns.add(
+                  JdbcColumn.newGenericTypeColumn(
+                      columnName,
+                      Types.CLOB,
+                      "CLOB",
+                      4000,
+                      0,
+                      false,
+                      false)); // TODO size type param
+            }
+
+            public void jsonColumn(Column column) {
+              columns.add(
+                  JdbcColumn.newGenericTypeColumn(
+                      columnName,
+                      Types.OTHER,
+                      "OBJECT",
+                      4000,
+                      0,
+                      false,
+                      false)); // TODO size type param
+            }
+
+            public void timestampColumn(Column column) {
+              columns.add(
+                  JdbcColumn.newGenericTypeColumn(
+                      columnName,
+                      Types.TIMESTAMP,
+                      "TIMESTAMP",
+                      26,
+                      0,
+                      false,
+                      false)); // size type param is from postgresql
+            }
+          });
+    }
+    return new JdbcSchema(Collections.unmodifiableList(columns));
   }
 }

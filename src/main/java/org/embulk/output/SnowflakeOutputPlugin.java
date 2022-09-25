@@ -163,8 +163,7 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
     logger.info("Connecting to {} options {}", url, maskedProps);
   }
 
-  // TODO This is almost copy from AbstractJdbcOutputPlugin excepting type of JSON -> OBJECT WITH
-  // TIME ZONE.
+  // TODO This is almost copy from AbstractJdbcOutputPlugin excepting type of JSON -> OBJECT
   //      AbstractJdbcOutputPlugin should have better extensibility.
   @Override
   protected JdbcSchema newJdbcSchemaForNewTable(Schema schema) {

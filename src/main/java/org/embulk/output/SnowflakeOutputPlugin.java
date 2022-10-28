@@ -207,7 +207,7 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
                   JdbcColumn.newGenericTypeColumn(
                       columnName,
                       Types.OTHER,
-                      "OBJECT",
+                      "VARIANT",
                       4000,
                       0,
                       false,

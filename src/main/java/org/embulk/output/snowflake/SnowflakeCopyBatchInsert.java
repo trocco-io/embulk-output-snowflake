@@ -371,7 +371,9 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
             if (retries > this.maxUploadRetries) {
               throw e;
             }
-            logger.warn("Upload error %s file %s retries: %d", e, snowflakeStageFileName, retries);
+            logger.warn(
+                String.format(
+                    "Upload error %s file %s retries: %d", e, snowflakeStageFileName, retries));
             Thread.sleep(retries * retries * 1000);
           }
           break;

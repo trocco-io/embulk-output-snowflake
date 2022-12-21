@@ -51,7 +51,7 @@ dependencies {
     testImplementation "org.embulk:embulk-parser-csv:0.10.31"
 
     compile "org.embulk:embulk-output-jdbc:0.10.2"
-    compile "net.snowflake:snowflake-jdbc:3.13.14"
+    compile "net.snowflake:snowflake-jdbc:3.13.26"
 }
 embulkPlugin {
     mainClass = "org.embulk.output.SnowflakeOutputPlugin"

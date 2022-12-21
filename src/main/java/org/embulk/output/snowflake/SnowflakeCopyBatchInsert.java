@@ -357,7 +357,7 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
         // put file to snowflake internal storage
         SnowflakeOutputConnection con = (SnowflakeOutputConnection) connector.connect(true);
 
-        do {
+        while (true) {
           try {
             logger.info(
                 String.format(
@@ -368,7 +368,7 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
             break;
           } catch (SQLException e) {
             retries++;
-            if (retries >= this.maxUploadRetries) {
+            if (retries > this.maxUploadRetries) {
               throw e;
             }
             logger.warn(
@@ -376,7 +376,7 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
                     "Upload error %s file %s retries: %d", e, snowflakeStageFileName, retries));
             Thread.sleep(retries * retries * 1000);
           }
-        } while (retries < this.maxUploadRetries);
+        }
 
         double seconds = (System.currentTimeMillis() - startTime) / 1000.0;
 

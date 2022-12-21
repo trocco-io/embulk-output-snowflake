@@ -51,10 +51,6 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
     @Config("delete_stage")
     @ConfigDefault("false")
     public boolean getDeleteStage();
-
-    @Config("max_upload_retries")
-    @ConfigDefault("3")
-    public int getMaxUploadRetries();
   }
 
   @Override
@@ -149,11 +145,7 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
       snowflakeCon.runCreateStage(this.stageIdentifier);
     }
 
-    return new SnowflakeCopyBatchInsert(
-        getConnector(task, true),
-        this.stageIdentifier,
-        false,
-        ((SnowflakePluginTask) task).getMaxUploadRetries());
+    return new SnowflakeCopyBatchInsert(getConnector(task, true), this.stageIdentifier, false);
   }
 
   @Override

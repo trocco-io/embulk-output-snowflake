@@ -26,7 +26,6 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
   protected static final String nullString = "\\N";
   protected static final String newLineString = "\n";
   protected static final String delimiterString = "\t";
-  private final int maxUploadRetries;
 
   private SnowflakeOutputConnection connection = null;
   private TableIdentifier tableIdentifier = null;
@@ -40,10 +39,7 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
   private List<Future<Void>> uploadAndCopyFutures;
 
   public SnowflakeCopyBatchInsert(
-      JdbcOutputConnector connector,
-      StageIdentifier stageIdentifier,
-      boolean deleteStageFile,
-      int maxUploadRetries)
+      JdbcOutputConnector connector, StageIdentifier stageIdentifier, boolean deleteStageFile)
       throws IOException {
     this.index = 0;
     openNewFile();
@@ -52,7 +48,6 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
     this.executorService = Executors.newCachedThreadPool();
     this.deleteStageFile = deleteStageFile;
     this.uploadAndCopyFutures = new ArrayList();
-    this.maxUploadRetries = maxUploadRetries;
   }
 
   @Override
@@ -256,7 +251,7 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
     String snowflakeStageFileName = "embulk_snowflake_" + SnowflakeUtils.randomString(8);
 
     UploadTask uploadTask =
-        new UploadTask(file, batchRows, stageIdentifier, snowflakeStageFileName, maxUploadRetries);
+        new UploadTask(file, batchRows, stageIdentifier, snowflakeStageFileName);
     Future<Void> uploadFuture = executorService.submit(uploadTask);
     uploadAndCopyFutures.add(uploadFuture);
 
@@ -335,49 +330,28 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
     private final int batchRows;
     private final String snowflakeStageFileName;
     private final StageIdentifier stageIdentifier;
-    private final int maxUploadRetries;
 
     public UploadTask(
-        File file,
-        int batchRows,
-        StageIdentifier stageIdentifier,
-        String snowflakeStageFileName,
-        int maxUploadRetries) {
+        File file, int batchRows, StageIdentifier stageIdentifier, String snowflakeStageFileName) {
       this.file = file;
       this.batchRows = batchRows;
       this.snowflakeStageFileName = snowflakeStageFileName;
       this.stageIdentifier = stageIdentifier;
-      this.maxUploadRetries = maxUploadRetries;
     }
 
-    public Void call() throws IOException, SQLException, InterruptedException {
+    public Void call() throws IOException, SQLException {
       logger.info(
           String.format(
               "Uploading file id %s to Snowflake (%,d bytes %,d rows)",
               snowflakeStageFileName, file.length(), batchRows));
 
-      int retries = 0;
       try {
         long startTime = System.currentTimeMillis();
         // put file to snowflake internal storage
         SnowflakeOutputConnection con = (SnowflakeOutputConnection) connector.connect(true);
 
         FileInputStream fileInputStream = new FileInputStream(file);
-        do {
-          try {
-            con.runUploadFile(stageIdentifier, snowflakeStageFileName, fileInputStream);
-          } catch (SQLException e) {
-            retries++;
-            if (retries > this.maxUploadRetries) {
-              throw e;
-            }
-            logger.warn(
-                String.format(
-                    "Upload error %s file %s retries: %d", e, snowflakeStageFileName, retries));
-            Thread.sleep(retries * retries * 1000);
-          }
-          break;
-        } while (retries < this.maxUploadRetries);
+        con.runUploadFile(stageIdentifier, snowflakeStageFileName, fileInputStream);
 
         double seconds = (System.currentTimeMillis() - startTime) / 1000.0;
 

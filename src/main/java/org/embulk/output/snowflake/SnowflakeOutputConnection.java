@@ -4,9 +4,12 @@ import java.io.FileInputStream;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.List;
 import net.snowflake.client.jdbc.SnowflakeConnection;
 import org.embulk.output.jdbc.JdbcColumn;
 import org.embulk.output.jdbc.JdbcOutputConnection;
+import org.embulk.output.jdbc.JdbcSchema;
+import org.embulk.output.jdbc.MergeConfig;
 import org.embulk.output.jdbc.TableIdentifier;
 
 public class SnowflakeOutputConnection extends JdbcOutputConnection {
@@ -75,6 +78,71 @@ public class SnowflakeOutputConnection extends JdbcOutputConnection {
     }
   }
 
+  @Override
+  protected String buildCollectMergeSql(
+      List<TableIdentifier> fromTables,
+      JdbcSchema schema,
+      TableIdentifier toTable,
+      MergeConfig mergeConfig)
+      throws SQLException {
+    StringBuilder sb = new StringBuilder();
+
+    sb.append("MERGE INTO ");
+    sb.append(quoteTableIdentifier(toTable));
+    sb.append(" AS T ");
+    sb.append(" USING (");
+    for (int i = 0; i < fromTables.size(); i++) {
+      if (i != 0) {
+        sb.append(" UNION ALL ");
+      }
+      sb.append(" SELECT ");
+      sb.append(buildColumns(schema, ""));
+      sb.append(" FROM ");
+      sb.append(quoteTableIdentifier(fromTables.get(i)));
+    }
+    sb.append(") AS S");
+    sb.append(" ON (");
+    for (int i = 0; i < mergeConfig.getMergeKeys().size(); i++) {
+      if (i != 0) {
+        sb.append(" AND ");
+      }
+      String mergeKey = quoteIdentifierString(mergeConfig.getMergeKeys().get(i));
+      sb.append("T.");
+      sb.append(mergeKey);
+      sb.append(" = S.");
+      sb.append(mergeKey);
+    }
+    sb.append(")");
+    sb.append(" WHEN MATCHED THEN");
+    sb.append(" UPDATE SET ");
+    if (mergeConfig.getMergeRule().isPresent()) {
+      for (int i = 0; i < mergeConfig.getMergeRule().get().size(); i++) {
+        if (i != 0) {
+          sb.append(", ");
+        }
+        sb.append(mergeConfig.getMergeRule().get().get(i));
+      }
+    } else {
+      for (int i = 0; i < schema.getCount(); i++) {
+        if (i != 0) {
+          sb.append(", ");
+        }
+        String column = quoteIdentifierString(schema.getColumnName(i));
+        sb.append(column);
+        sb.append(" = S.");
+        sb.append(column);
+      }
+    }
+    sb.append(" WHEN NOT MATCHED THEN");
+    sb.append(" INSERT (");
+    sb.append(buildColumns(schema, ""));
+    sb.append(") VALUES (");
+    sb.append(buildColumns(schema, "S."));
+    sb.append(");");
+
+    return sb.toString();
+  }
+
   protected String buildCreateStageSQL(StageIdentifier stageIdentifier) {
     StringBuilder sb = new StringBuilder();
     sb.append("CREATE STAGE IF NOT EXISTS ");
@@ -135,6 +203,18 @@ public class SnowflakeOutputConnection extends JdbcOutputConnection {
     sb.append("/");
     sb.append(snowflakeStageFileName);
     sb.append(".csv.gz");
+    return sb.toString();
+  }
+
+  private String buildColumns(JdbcSchema schema, String prefix) {
+    StringBuilder sb = new StringBuilder();
+    for (int i = 0; i < schema.getCount(); i++) {
+      if (i != 0) {
+        sb.append(", ");
+      }
+      sb.append(prefix);
+      sb.append(quoteIdentifierString(schema.getColumnName(i)));
+    }
     return sb.toString();
   }
 }

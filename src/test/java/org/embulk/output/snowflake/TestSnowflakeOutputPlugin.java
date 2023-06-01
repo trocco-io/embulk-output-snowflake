@@ -435,7 +435,6 @@ public class TestSnowflakeOutputPlugin {
     String targetTableFullName =
         String.format(
             "\"%s\".\"%s\".\"%s\"", TEST_SNOWFLAKE_DB, TEST_SNOWFLAKE_SCHEMA, targetTableName);
-    System.out.println(targetTableFullName);
     runQuery(
         String.format("create table %s (c0 FLOAT, c1 STRING)", targetTableFullName),
         foreachResult(rs_ -> {}));

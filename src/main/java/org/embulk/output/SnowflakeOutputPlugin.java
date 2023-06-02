@@ -159,8 +159,7 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
         this.stageIdentifier,
         false,
         pluginTask.getMaxUploadRetries(),
-        pluginTask.getEmtpyFieldAsNull()
-    );
+        pluginTask.getEmtpyFieldAsNull());
   }
 
   @Override

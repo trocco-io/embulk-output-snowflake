@@ -21,7 +21,8 @@ public class SnowflakeOutputConnection extends JdbcOutputConnection {
       String delimiterString,
       boolean emptyFieldAsNull)
       throws SQLException {
-    String sql = buildCopySQL(tableIdentifier, stageIdentifier, filename, delimiterString, emptyFieldAsNull);
+    String sql =
+        buildCopySQL(tableIdentifier, stageIdentifier, filename, delimiterString, emptyFieldAsNull);
     runUpdate(sql);
   }
 
@@ -114,7 +115,7 @@ public class SnowflakeOutputConnection extends JdbcOutputConnection {
     sb.append(" FILE_FORMAT = ( TYPE = CSV FIELD_DELIMITER = '");
     sb.append(delimiterString);
     sb.append("') ");
-    if (!emptyFieldAsNull){
+    if (!emptyFieldAsNull) {
       sb.append("EMPTY_FIELD_AS_NULL = FALSE");
     }
     sb.append(";");

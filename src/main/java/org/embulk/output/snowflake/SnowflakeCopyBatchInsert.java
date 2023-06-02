@@ -8,7 +8,6 @@ import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.zip.GZIPOutputStream;
-
 import org.embulk.output.jdbc.BatchInsert;
 import org.embulk.output.jdbc.JdbcOutputConnector;
 import org.embulk.output.jdbc.JdbcSchema;
@@ -42,11 +41,11 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
   private boolean emptyFieldAsNull;
 
   public SnowflakeCopyBatchInsert(
-          JdbcOutputConnector connector,
-          StageIdentifier stageIdentifier,
-          boolean deleteStageFile,
-          int maxUploadRetries,
-          boolean emptyFieldAsNull)
+      JdbcOutputConnector connector,
+      StageIdentifier stageIdentifier,
+      boolean deleteStageFile,
+      int maxUploadRetries,
+      boolean emptyFieldAsNull)
       throws IOException {
     this.index = 0;
     openNewFile();
@@ -399,7 +398,8 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
     private final String snowflakeStageFileName;
     private final boolean emptyFieldAsNull;
 
-    public CopyTask(Future<Void> uploadFuture, String snowflakeStageFileName, boolean emptyFieldAsNull) {
+    public CopyTask(
+        Future<Void> uploadFuture, String snowflakeStageFileName, boolean emptyFieldAsNull) {
       this.uploadFuture = uploadFuture;
       this.snowflakeStageFileName = snowflakeStageFileName;
       this.emptyFieldAsNull = emptyFieldAsNull;
@@ -414,7 +414,12 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
           logger.info("Running COPY from file {}", snowflakeStageFileName);
 
           long startTime = System.currentTimeMillis();
-          con.runCopy(tableIdentifier, stageIdentifier, snowflakeStageFileName, delimiterString, emptyFieldAsNull);
+          con.runCopy(
+              tableIdentifier,
+              stageIdentifier,
+              snowflakeStageFileName,
+              delimiterString,
+              emptyFieldAsNull);
 
           double seconds = (System.currentTimeMillis() - startTime) / 1000.0;
 

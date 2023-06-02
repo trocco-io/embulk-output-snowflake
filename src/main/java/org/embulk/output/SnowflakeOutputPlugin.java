@@ -57,7 +57,7 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
     public int getMaxUploadRetries();
 
     @Config("empty_field_as_null")
-    @ConfigDefault("ture")
+    @ConfigDefault("true")
     public boolean getEmtpyFieldAsNull();
   }
 

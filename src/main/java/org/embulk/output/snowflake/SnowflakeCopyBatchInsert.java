@@ -9,7 +9,6 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.zip.GZIPOutputStream;
 
-import org.embulk.output.SnowflakeOutputPlugin;
 import org.embulk.output.jdbc.BatchInsert;
 import org.embulk.output.jdbc.JdbcOutputConnector;
 import org.embulk.output.jdbc.JdbcSchema;

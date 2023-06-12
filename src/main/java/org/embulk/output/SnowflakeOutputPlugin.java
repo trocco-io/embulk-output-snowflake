@@ -68,7 +68,12 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
         .setMaxTableNameLength(127)
         .setSupportedModes(
             new HashSet<>(
-                Arrays.asList(Mode.INSERT, Mode.INSERT_DIRECT, Mode.TRUNCATE_INSERT, Mode.REPLACE)))
+                Arrays.asList(
+                    Mode.INSERT,
+                    Mode.INSERT_DIRECT,
+                    Mode.TRUNCATE_INSERT,
+                    Mode.REPLACE,
+                    Mode.MERGE)))
         .setIgnoreMergeKeys(false);
   }
 

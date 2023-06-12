@@ -13,6 +13,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
@@ -517,6 +518,171 @@ public class TestSnowflakeOutputPlugin {
             rs -> {
               assertEquals(3, rs.getInt(1));
             }));
+  }
+
+  @Test
+  public void testRuntimeMergeTable() throws IOException {
+    File in = testFolder.newFile(SnowflakeUtils.randomString(8) + ".csv");
+    List<String> lines =
+        Stream.of("c0:double,c1:double,c2:string", "1,1,aaa", "1,2,bbb", "1,3,ccc")
+            .collect(Collectors.toList());
+    Files.write(in.toPath(), lines);
+
+    String targetTableName = generateTemporaryTableName();
+    String targetTableFullName =
+        String.format(
+            "\"%s\".\"%s\".\"%s\"", TEST_SNOWFLAKE_DB, TEST_SNOWFLAKE_SCHEMA, targetTableName);
+    runQuery(
+        String.format(
+            "create table %s (\"c0\" NUMBER, \"c1\" NUMBER, \"c2\" STRING)", targetTableFullName),
+        foreachResult(rs_ -> {}));
+    runQuery(
+        String.format("insert into %s values (1, 1, 'ddd'), (1, 4, 'eee');", targetTableFullName),
+        foreachResult(rs_ -> {}));
+
+    final ConfigSource config =
+        CONFIG_MAPPER_FACTORY
+            .newConfigSource()
+            .set("type", "snowflake")
+            .set("user", TEST_SNOWFLAKE_USER)
+            .set("password", TEST_SNOWFLAKE_PASSWORD)
+            .set("host", TEST_SNOWFLAKE_HOST)
+            .set("database", TEST_SNOWFLAKE_DB)
+            .set("warehouse", TEST_SNOWFLAKE_WAREHOUSE)
+            .set("schema", TEST_SNOWFLAKE_SCHEMA)
+            .set("mode", "merge")
+            .set("merge_keys", new ArrayList<String>(Arrays.asList("c0", "c1")))
+            .set("table", targetTableName);
+    embulk.runOutput(config, in.toPath());
+
+    runQuery(
+        String.format("select count(*) from %s;", targetTableFullName),
+        foreachResult(
+            rs -> {
+              assertEquals(4, rs.getInt(1));
+            }));
+    List<String> results = new ArrayList();
+    runQuery(
+        "select \"c0\",\"c1\",\"c2\" from " + targetTableFullName + " order by 1, 2",
+        foreachResult(
+            rs -> {
+              results.add(rs.getString(1) + "," + rs.getString(2) + "," + rs.getString(3));
+            }));
+    List<String> expected =
+        Stream.of("1,1,aaa", "1,2,bbb", "1,3,ccc", "1,4,eee").collect(Collectors.toList());
+    for (int i = 0; i < results.size(); i++) {
+      assertEquals(expected.get(i), results.get(i));
+    }
+  }
+
+  @Test
+  public void testRuntimeMergeTableWithMergeRule() throws IOException {
+    File in = testFolder.newFile(SnowflakeUtils.randomString(8) + ".csv");
+    List<String> lines =
+        Stream.of("c0:double,c1:string", "0.0,aaa", "0.1,bbb", "1.2,ccc")
+            .collect(Collectors.toList());
+    Files.write(in.toPath(), lines);
+
+    String targetTableName = generateTemporaryTableName();
+    String targetTableFullName =
+        String.format(
+            "\"%s\".\"%s\".\"%s\"", TEST_SNOWFLAKE_DB, TEST_SNOWFLAKE_SCHEMA, targetTableName);
+    runQuery(
+        String.format("create table %s (\"c0\" FLOAT, \"c1\" STRING)", targetTableFullName),
+        foreachResult(rs_ -> {}));
+    runQuery(
+        String.format("insert into %s values (0.0, 'ddd'), (1.3, 'eee');", targetTableFullName),
+        foreachResult(rs_ -> {}));
+
+    final ConfigSource config =
+        CONFIG_MAPPER_FACTORY
+            .newConfigSource()
+            .set("type", "snowflake")
+            .set("user", TEST_SNOWFLAKE_USER)
+            .set("password", TEST_SNOWFLAKE_PASSWORD)
+            .set("host", TEST_SNOWFLAKE_HOST)
+            .set("database", TEST_SNOWFLAKE_DB)
+            .set("warehouse", TEST_SNOWFLAKE_WAREHOUSE)
+            .set("schema", TEST_SNOWFLAKE_SCHEMA)
+            .set("mode", "merge")
+            .set("merge_keys", new ArrayList<String>(Arrays.asList("c0")))
+            .set(
+                "merge_rule", new ArrayList<String>(Arrays.asList("\"c1\" = T.\"c1\" || S.\"c1\"")))
+            .set("table", targetTableName);
+    embulk.runOutput(config, in.toPath());
+
+    runQuery(
+        String.format("select count(*) from %s;", targetTableFullName),
+        foreachResult(
+            rs -> {
+              assertEquals(4, rs.getInt(1));
+            }));
+    List<String> results = new ArrayList();
+    runQuery(
+        "select \"c0\",\"c1\" from " + targetTableFullName + " order by 1",
+        foreachResult(
+            rs -> {
+              results.add(rs.getString(1) + "," + rs.getString(2));
+            }));
+    List<String> expected =
+        Stream.of("0.0,dddaaa", "0.1,bbb", "1.2,ccc", "1.3,eee").collect(Collectors.toList());
+    for (int i = 0; i < results.size(); i++) {
+      assertEquals(expected.get(i), results.get(i));
+    }
+  }
+
+  @Test
+  public void testRuntimeMergeTableWithoutMergeKey() throws IOException {
+    File in = testFolder.newFile(SnowflakeUtils.randomString(8) + ".csv");
+    List<String> lines =
+        Stream.of("c0:double,c1:string", "0.0,aaa", "0.1,bbb", "1.2,ccc")
+            .collect(Collectors.toList());
+    Files.write(in.toPath(), lines);
+
+    String targetTableName = generateTemporaryTableName();
+    String targetTableFullName =
+        String.format(
+            "\"%s\".\"%s\".\"%s\"", TEST_SNOWFLAKE_DB, TEST_SNOWFLAKE_SCHEMA, targetTableName);
+    runQuery(
+        String.format(
+            "create table %s (\"c0\" FLOAT PRIMARY KEY, \"c1\" STRING)", targetTableFullName),
+        foreachResult(rs_ -> {}));
+    runQuery(
+        String.format("insert into %s values (0.0, 'ddd'), (1.3, 'eee');", targetTableFullName),
+        foreachResult(rs_ -> {}));
+
+    final ConfigSource config =
+        CONFIG_MAPPER_FACTORY
+            .newConfigSource()
+            .set("type", "snowflake")
+            .set("user", TEST_SNOWFLAKE_USER)
+            .set("password", TEST_SNOWFLAKE_PASSWORD)
+            .set("host", TEST_SNOWFLAKE_HOST)
+            .set("database", TEST_SNOWFLAKE_DB)
+            .set("warehouse", TEST_SNOWFLAKE_WAREHOUSE)
+            .set("schema", TEST_SNOWFLAKE_SCHEMA)
+            .set("mode", "merge")
+            .set("table", targetTableName);
+    embulk.runOutput(config, in.toPath());
+
+    runQuery(
+        String.format("select count(*) from %s;", targetTableFullName),
+        foreachResult(
+            rs -> {
+              assertEquals(4, rs.getInt(1));
+            }));
+    List<String> results = new ArrayList();
+    runQuery(
+        "select \"c0\",\"c1\" from " + targetTableFullName + " order by 1",
+        foreachResult(
+            rs -> {
+              results.add(rs.getString(1) + "," + rs.getString(2));
+            }));
+    List<String> expected =
+        Stream.of("0.0,aaa", "0.1,bbb", "1.2,ccc", "1.3,eee").collect(Collectors.toList());
+    for (int i = 0; i < results.size(); i++) {
+      assertEquals(expected.get(i), results.get(i));
+    }
   }
 
   @Ignore(

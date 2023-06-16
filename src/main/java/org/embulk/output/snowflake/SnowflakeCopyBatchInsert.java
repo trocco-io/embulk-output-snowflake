@@ -38,12 +38,14 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
   private long totalRows;
   private int fileCount;
   private List<Future<Void>> uploadAndCopyFutures;
+  private boolean emptyFieldAsNull;
 
   public SnowflakeCopyBatchInsert(
       JdbcOutputConnector connector,
       StageIdentifier stageIdentifier,
       boolean deleteStageFile,
-      int maxUploadRetries)
+      int maxUploadRetries,
+      boolean emptyFieldAsNull)
       throws IOException {
     this.index = 0;
     openNewFile();
@@ -53,6 +55,7 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
     this.deleteStageFile = deleteStageFile;
     this.uploadAndCopyFutures = new ArrayList();
     this.maxUploadRetries = maxUploadRetries;
+    this.emptyFieldAsNull = emptyFieldAsNull;
   }
 
   @Override
@@ -260,7 +263,7 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
     Future<Void> uploadFuture = executorService.submit(uploadTask);
     uploadAndCopyFutures.add(uploadFuture);
 
-    CopyTask copyTask = new CopyTask(uploadFuture, snowflakeStageFileName);
+    CopyTask copyTask = new CopyTask(uploadFuture, snowflakeStageFileName, emptyFieldAsNull);
     uploadAndCopyFutures.add(executorService.submit(copyTask));
 
     fileCount++;
@@ -393,10 +396,13 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
   private class CopyTask implements Callable<Void> {
     private final Future<Void> uploadFuture;
     private final String snowflakeStageFileName;
+    private final boolean emptyFieldAsNull;
 
-    public CopyTask(Future<Void> uploadFuture, String snowflakeStageFileName) {
+    public CopyTask(
+        Future<Void> uploadFuture, String snowflakeStageFileName, boolean emptyFieldAsNull) {
       this.uploadFuture = uploadFuture;
       this.snowflakeStageFileName = snowflakeStageFileName;
+      this.emptyFieldAsNull = emptyFieldAsNull;
     }
 
     public Void call() throws SQLException, InterruptedException, ExecutionException {
@@ -408,7 +414,12 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
           logger.info("Running COPY from file {}", snowflakeStageFileName);
 
           long startTime = System.currentTimeMillis();
-          con.runCopy(tableIdentifier, stageIdentifier, snowflakeStageFileName, delimiterString);
+          con.runCopy(
+              tableIdentifier,
+              stageIdentifier,
+              snowflakeStageFileName,
+              delimiterString,
+              emptyFieldAsNull);
 
           double seconds = (System.currentTimeMillis() - startTime) / 1000.0;
 

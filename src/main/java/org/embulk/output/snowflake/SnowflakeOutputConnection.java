@@ -21,9 +21,11 @@ public class SnowflakeOutputConnection extends JdbcOutputConnection {
       TableIdentifier tableIdentifier,
       StageIdentifier stageIdentifier,
       String filename,
-      String delimiterString)
+      String delimiterString,
+      boolean emptyFieldAsNull)
       throws SQLException {
-    String sql = buildCopySQL(tableIdentifier, stageIdentifier, filename, delimiterString);
+    String sql =
+        buildCopySQL(tableIdentifier, stageIdentifier, filename, delimiterString, emptyFieldAsNull);
     runUpdate(sql);
   }
 
@@ -171,7 +173,8 @@ public class SnowflakeOutputConnection extends JdbcOutputConnection {
       TableIdentifier tableIdentifier,
       StageIdentifier stageIdentifier,
       String snowflakeStageFileName,
-      String delimiterString) {
+      String delimiterString,
+      boolean emptyFieldAsNull) {
     StringBuilder sb = new StringBuilder();
     sb.append("COPY INTO ");
     quoteTableIdentifier(sb, tableIdentifier);
@@ -179,7 +182,11 @@ public class SnowflakeOutputConnection extends JdbcOutputConnection {
     quoteInternalStoragePath(sb, stageIdentifier, snowflakeStageFileName);
     sb.append(" FILE_FORMAT = ( TYPE = CSV FIELD_DELIMITER = '");
     sb.append(delimiterString);
-    sb.append("');");
+    sb.append("') ");
+    if (!emptyFieldAsNull) {
+      sb.append("EMPTY_FIELD_AS_NULL = FALSE");
+    }
+    sb.append(";");
     return sb.toString();
   }
 

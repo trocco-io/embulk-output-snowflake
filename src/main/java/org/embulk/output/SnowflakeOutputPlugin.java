@@ -55,6 +55,10 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
     @Config("max_upload_retries")
     @ConfigDefault("3")
     public int getMaxUploadRetries();
+
+    @Config("empty_field_as_null")
+    @ConfigDefault("true")
+    public boolean getEmtpyFieldAsNull();
   }
 
   @Override
@@ -153,12 +157,14 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
       this.stageIdentifier = StageIdentifierHolder.getStageIdentifier(t);
       snowflakeCon.runCreateStage(this.stageIdentifier);
     }
+    SnowflakePluginTask pluginTask = (SnowflakePluginTask) task;
 
     return new SnowflakeCopyBatchInsert(
         getConnector(task, true),
         this.stageIdentifier,
         false,
-        ((SnowflakePluginTask) task).getMaxUploadRetries());
+        pluginTask.getMaxUploadRetries(),
+        pluginTask.getEmtpyFieldAsNull());
   }
 
   @Override

@@ -182,11 +182,11 @@ public class SnowflakeOutputConnection extends JdbcOutputConnection {
     quoteInternalStoragePath(sb, stageIdentifier, snowflakeStageFileName);
     sb.append(" FILE_FORMAT = ( TYPE = CSV FIELD_DELIMITER = '");
     sb.append(delimiterString);
-    sb.append("') ");
+    sb.append("'");
     if (!emptyFieldAsNull) {
-      sb.append("EMPTY_FIELD_AS_NULL = FALSE");
+      sb.append(" EMPTY_FIELD_AS_NULL = FALSE");
     }
-    sb.append(";");
+    sb.append(" );");
     return sb.toString();
   }
 

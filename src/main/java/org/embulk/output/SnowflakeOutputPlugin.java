@@ -12,6 +12,7 @@ import org.embulk.output.snowflake.SnowflakeOutputConnection;
 import org.embulk.output.snowflake.SnowflakeOutputConnector;
 import org.embulk.output.snowflake.StageIdentifier;
 import org.embulk.output.snowflake.StageIdentifierHolder;
+import org.embulk.output.snowflake.PrivateKeyReader;
 import org.embulk.spi.Column;
 import org.embulk.spi.ColumnVisitor;
 import org.embulk.spi.OutputPlugin;
@@ -37,6 +38,9 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
     @Config("password")
     @ConfigDefault("\"\"")
     public String getPassword();
+
+    @Config("privateKey")
+    String getPrivateKey();
 
     @Config("database")
     public String getDatabase();
@@ -92,7 +96,17 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
     Properties props = new Properties();
 
     props.setProperty("user", t.getUser());
-    props.setProperty("password", t.getPassword());
+    if (!t.getPassword().isEmpty()) {
+      props.setProperty("password", t.getPassword());
+    } else if (!t.getPrivateKey().isEmpty()) {
+      try {
+        props.put("privateKey", PrivateKeyReader.get(t.getPrivateKey()));
+      } catch (IOException e) {
+        // Because the source of newConnection definition does not assume IOException, change it to RuntimeException.
+        throw new RuntimeException(e);
+      }
+    }
+
     props.setProperty("warehouse", t.getWarehouse());
     props.setProperty("db", t.getDatabase());
     props.setProperty("schema", t.getSchema());
@@ -174,6 +188,8 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
       if (key.equals("password")) {
         maskedProps.setProperty(key, "***");
       } else if (key.equals("proxyPassword")) {
+        maskedProps.setProperty(key, "***");
+      } else if (key.equals("privateKey")) {
         maskedProps.setProperty(key, "***");
       } else {
         maskedProps.setProperty(key, props.getProperty(key));

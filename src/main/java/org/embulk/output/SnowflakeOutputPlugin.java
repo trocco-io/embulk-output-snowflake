@@ -40,6 +40,7 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
     public String getPassword();
 
     @Config("privateKey")
+    @ConfigDefault("\"\"")
     String getPrivateKey();
 
     @Config("database")

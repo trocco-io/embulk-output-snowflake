@@ -13,6 +13,7 @@ Snowflake output plugin for Embulk loads records to Snowflake.
 - **host**: database host name (string, required)
 - **user**: database login user name (string, required)
 - **password**: database login password (string, default: "")
+- **privateKey**: database login using key-pair authentication(string, default: ""). This authentication method requires a 2048-bit (minimum) RSA key pair. 
 - **warehouse**: destination warehouse name (string, required)
 - **database**: destination database name (string, required)
 - **schema**: destination schema name (string, default: "public")

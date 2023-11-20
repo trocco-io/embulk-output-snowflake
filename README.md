@@ -59,6 +59,10 @@ Snowflake output plugin for Embulk loads records to Snowflake.
 
 ## Build
 
+## Not implement
+- Passphrase for `privateKey` in key-pair authentication.
+
+
 ```
 $ ./gradlew gem  # -t to watch change of files and rebuild continuously
 ```

@@ -5,6 +5,7 @@ import java.sql.SQLException;
 import java.sql.Types;
 import java.util.*;
 import org.embulk.config.ConfigDiff;
+import org.embulk.config.ConfigException;
 import org.embulk.config.TaskSource;
 import org.embulk.output.jdbc.*;
 import org.embulk.output.snowflake.SnowflakeCopyBatchInsert;
@@ -103,8 +104,8 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
       try {
         props.put("privateKey", PrivateKeyReader.get(t.getPrivateKey()));
       } catch (IOException e) {
-        // Because the source of newConnection definition does not assume IOException, change it to RuntimeException.
-        throw new RuntimeException(e);
+        // Because the source of newConnection definition does not assume IOException, change it to ConfigException.
+        throw new ConfigException(e);
       }
     }
 

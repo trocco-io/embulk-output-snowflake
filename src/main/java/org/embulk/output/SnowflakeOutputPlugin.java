@@ -186,7 +186,8 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
   @Override
   protected void logConnectionProperties(String url, Properties props) {
     Properties maskedProps = new Properties();
-    for (String key : props.stringPropertyNames()) {
+    for (Object keyObj : props.keySet()) {
+      String key = (String) keyObj;
       if (key.equals("password")) {
         maskedProps.setProperty(key, "***");
       } else if (key.equals("proxyPassword")) {

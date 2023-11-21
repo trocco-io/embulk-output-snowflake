@@ -29,4 +29,3 @@ public class PrivateKeyReader {
     return converter.getPrivateKey(privateKeyInfo);
   }
 }
-

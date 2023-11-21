@@ -8,12 +8,12 @@ import org.embulk.config.ConfigDiff;
 import org.embulk.config.ConfigException;
 import org.embulk.config.TaskSource;
 import org.embulk.output.jdbc.*;
+import org.embulk.output.snowflake.PrivateKeyReader;
 import org.embulk.output.snowflake.SnowflakeCopyBatchInsert;
 import org.embulk.output.snowflake.SnowflakeOutputConnection;
 import org.embulk.output.snowflake.SnowflakeOutputConnector;
 import org.embulk.output.snowflake.StageIdentifier;
 import org.embulk.output.snowflake.StageIdentifierHolder;
-import org.embulk.output.snowflake.PrivateKeyReader;
 import org.embulk.spi.Column;
 import org.embulk.spi.ColumnVisitor;
 import org.embulk.spi.OutputPlugin;
@@ -104,7 +104,8 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
       try {
         props.put("privateKey", PrivateKeyReader.get(t.getPrivateKey()));
       } catch (IOException e) {
-        // Because the source of newConnection definition does not assume IOException, change it to ConfigException.
+        // Because the source of newConnection definition does not assume IOException, change it to
+        // ConfigException.
         throw new ConfigException(e);
       }
     }

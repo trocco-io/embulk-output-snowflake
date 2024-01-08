@@ -54,6 +54,10 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
     @ConfigDefault("\"public\"")
     public String getSchema();
 
+    @Config("role")
+    @ConfigDefault("\"\"")
+    public String getRole();
+
     @Config("delete_stage")
     @ConfigDefault("false")
     public boolean getDeleteStage();
@@ -113,6 +117,9 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
     props.setProperty("warehouse", t.getWarehouse());
     props.setProperty("db", t.getDatabase());
     props.setProperty("schema", t.getSchema());
+    if(!t.getRole().isEmpty()) {
+      props.setProperty("role", t.getRole());
+    }
 
     // When CLIENT_METADATA_REQUEST_USE_CONNECTION_CTX is false (default),
     // getMetaData().getColumns() returns columns of the tables which table name is

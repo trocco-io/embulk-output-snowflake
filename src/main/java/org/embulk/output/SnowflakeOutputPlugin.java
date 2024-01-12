@@ -4,6 +4,9 @@ import java.io.IOException;
 import java.sql.SQLException;
 import java.sql.Types;
 import java.util.*;
+
+import net.snowflake.client.jdbc.internal.org.bouncycastle.operator.OperatorCreationException;
+import net.snowflake.client.jdbc.internal.org.bouncycastle.pkcs.PKCSException;
 import org.embulk.config.ConfigDiff;
 import org.embulk.config.ConfigException;
 import org.embulk.config.TaskSource;
@@ -43,6 +46,10 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
     @Config("privateKey")
     @ConfigDefault("\"\"")
     String getPrivateKey();
+
+    @Config("privateKeyPassphrase")
+    @ConfigDefault("\"\"")
+    String getPrivateKeyPassphrase();
 
     @Config("database")
     public String getDatabase();
@@ -102,10 +109,10 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
       props.setProperty("password", t.getPassword());
     } else if (!t.getPrivateKey().isEmpty()) {
       try {
-        props.put("privateKey", PrivateKeyReader.get(t.getPrivateKey()));
-      } catch (IOException e) {
-        // Because the source of newConnection definition does not assume IOException, change it to
-        // ConfigException.
+        props.put("privateKey", PrivateKeyReader.get(t.getPrivateKey(), t.getPrivateKeyPassphrase()));
+      } catch (IOException | OperatorCreationException | PKCSException e) {
+        // Since this method is not allowed to throw any checked exception,
+        // wrap it with ConfigException, which is unchecked.
         throw new ConfigException(e);
       }
     }

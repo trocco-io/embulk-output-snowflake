@@ -117,7 +117,7 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
     props.setProperty("warehouse", t.getWarehouse());
     props.setProperty("db", t.getDatabase());
     props.setProperty("schema", t.getSchema());
-    if(!t.getRole().isEmpty()) {
+    if (!t.getRole().isEmpty()) {
       props.setProperty("role", t.getRole());
     }
 

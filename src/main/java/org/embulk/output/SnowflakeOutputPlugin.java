@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.sql.SQLException;
 import java.sql.Types;
 import java.util.*;
-
 import net.snowflake.client.jdbc.internal.org.bouncycastle.operator.OperatorCreationException;
 import net.snowflake.client.jdbc.internal.org.bouncycastle.pkcs.PKCSException;
 import org.embulk.config.ConfigDiff;
@@ -109,7 +108,8 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
       props.setProperty("password", t.getPassword());
     } else if (!t.getPrivateKey().isEmpty()) {
       try {
-        props.put("privateKey", PrivateKeyReader.get(t.getPrivateKey(), t.getPrivateKeyPassphrase()));
+        props.put(
+            "privateKey", PrivateKeyReader.get(t.getPrivateKey(), t.getPrivateKeyPassphrase()));
       } catch (IOException | OperatorCreationException | PKCSException e) {
         // Since this method is not allowed to throw any checked exception,
         // wrap it with ConfigException, which is unchecked.

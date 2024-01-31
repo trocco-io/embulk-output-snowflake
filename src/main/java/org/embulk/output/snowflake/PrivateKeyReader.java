@@ -17,7 +17,8 @@ import net.snowflake.client.jdbc.internal.org.bouncycastle.pkcs.PKCSException;
 // ref:
 // https://docs.snowflake.com/en/developer-guide/jdbc/jdbc-configure#privatekey-property-in-connection-properties
 public class PrivateKeyReader {
-  public static PrivateKey get(String pemString, String passphrase) throws IOException, OperatorCreationException, PKCSException {
+  public static PrivateKey get(String pemString, String passphrase)
+      throws IOException, OperatorCreationException, PKCSException {
     Security.addProvider(new BouncyCastleProvider());
     PEMParser pemParser = new PEMParser(new StringReader(pemString));
     Object pemObject = pemParser.readObject();
@@ -26,8 +27,10 @@ public class PrivateKeyReader {
     PrivateKeyInfo privateKeyInfo;
     if (pemObject instanceof PKCS8EncryptedPrivateKeyInfo) {
       // Handle the case where the private key is encrypted.
-      PKCS8EncryptedPrivateKeyInfo encryptedPrivateKeyInfo = (PKCS8EncryptedPrivateKeyInfo) pemObject;
-      InputDecryptorProvider pkcs8Prov = new JceOpenSSLPKCS8DecryptorProviderBuilder().build(passphrase.toCharArray());
+      PKCS8EncryptedPrivateKeyInfo encryptedPrivateKeyInfo =
+          (PKCS8EncryptedPrivateKeyInfo) pemObject;
+      InputDecryptorProvider pkcs8Prov =
+          new JceOpenSSLPKCS8DecryptorProviderBuilder().build(passphrase.toCharArray());
       privateKeyInfo = encryptedPrivateKeyInfo.decryptPrivateKeyInfo(pkcs8Prov);
     } else if (pemObject instanceof PrivateKeyInfo) {
       privateKeyInfo = (PrivateKeyInfo) pemObject;
@@ -35,7 +38,7 @@ public class PrivateKeyReader {
       throw new IllegalArgumentException("Provided PEM does not contain a valid Private Key");
     }
     JcaPEMKeyConverter converter =
-            new JcaPEMKeyConverter().setProvider(BouncyCastleProvider.PROVIDER_NAME);
+        new JcaPEMKeyConverter().setProvider(BouncyCastleProvider.PROVIDER_NAME);
     return converter.getPrivateKey(privateKeyInfo);
   }
 }

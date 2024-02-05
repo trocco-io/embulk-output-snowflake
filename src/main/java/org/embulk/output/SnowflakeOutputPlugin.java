@@ -1,5 +1,7 @@
 package org.embulk.output;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonValue;
 import java.io.IOException;
 import java.sql.SQLException;
 import java.sql.Types;
@@ -10,6 +12,7 @@ import org.embulk.config.TaskSource;
 import org.embulk.output.jdbc.*;
 import org.embulk.output.snowflake.PrivateKeyReader;
 import org.embulk.output.snowflake.SnowflakeCopyBatchInsert;
+import org.embulk.output.snowflake.SnowflakeMatchByColumnNameCopyBatchInsert;
 import org.embulk.output.snowflake.SnowflakeOutputConnection;
 import org.embulk.output.snowflake.SnowflakeOutputConnector;
 import org.embulk.output.snowflake.StageIdentifier;
@@ -65,6 +68,36 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
     @Config("empty_field_as_null")
     @ConfigDefault("true")
     public boolean getEmtpyFieldAsNull();
+
+    @Config("match_by_column_name")
+    @ConfigDefault("\"none\"")
+    public MatchByColumnName getMatchByColumnName();
+
+    public enum MatchByColumnName {
+      // TODO support case_sensitive
+      CASE_INSENSITIVE,
+      NONE;
+
+      @JsonValue
+      @Override
+      public String toString() {
+        return name().toLowerCase(Locale.ENGLISH);
+      }
+
+      @JsonCreator
+      public static MatchByColumnName fromString(String value) {
+        switch (value) {
+          case "case_insensitive":
+            return CASE_INSENSITIVE;
+          case "none":
+            return NONE;
+          default:
+            throw new ConfigException(
+                String.format(
+                    "Unknown value '%s'. Supported values are case_insensitive, none", value));
+        }
+      }
+    }
   }
 
   @Override
@@ -176,12 +209,40 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
     }
     SnowflakePluginTask pluginTask = (SnowflakePluginTask) task;
 
-    return new SnowflakeCopyBatchInsert(
+    SnowflakePluginTask.MatchByColumnName matchByColumnName = pluginTask.getMatchByColumnName();
+    if (matchByColumnName == SnowflakePluginTask.MatchByColumnName.NONE) {
+      return new SnowflakeCopyBatchInsert(
+          getConnector(task, true),
+          this.stageIdentifier,
+          false,
+          pluginTask.getMaxUploadRetries(),
+          pluginTask.getEmtpyFieldAsNull());
+    }
+
+    JdbcSchema existingJdbcSchema;
+    JdbcOutputConnection con = getConnector(task, true).connect(true);
+    Mode mode = task.getMode();
+
+    Optional<JdbcSchema> initialTargetTableSchema =
+        mode.ignoreTargetTableSchema()
+            ? Optional.empty()
+            : newJdbcSchemaFromTableIfExists(con, task.getActualTable());
+    if (initialTargetTableSchema.isPresent()) {
+      existingJdbcSchema = initialTargetTableSchema.get();
+    } else if (task.getIntermediateTables().isPresent()
+        && !task.getIntermediateTables().get().isEmpty()) {
+      TableIdentifier firstItermTable = task.getIntermediateTables().get().get(0);
+      existingJdbcSchema = newJdbcSchemaFromTableIfExists(con, firstItermTable).get();
+    } else {
+      existingJdbcSchema = newJdbcSchemaFromTableIfExists(con, task.getActualTable()).get();
+    }
+    return new SnowflakeMatchByColumnNameCopyBatchInsert(
         getConnector(task, true),
         this.stageIdentifier,
         false,
         pluginTask.getMaxUploadRetries(),
-        pluginTask.getEmtpyFieldAsNull());
+        pluginTask.getEmtpyFieldAsNull(),
+        existingJdbcSchema);
   }
 
   @Override

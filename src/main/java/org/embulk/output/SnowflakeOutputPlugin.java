@@ -6,13 +6,13 @@ import java.io.IOException;
 import java.sql.SQLException;
 import java.sql.Types;
 import java.util.*;
+import java.util.function.BiFunction;
 import org.embulk.config.ConfigDiff;
 import org.embulk.config.ConfigException;
 import org.embulk.config.TaskSource;
 import org.embulk.output.jdbc.*;
 import org.embulk.output.snowflake.PrivateKeyReader;
 import org.embulk.output.snowflake.SnowflakeCopyBatchInsert;
-import org.embulk.output.snowflake.SnowflakeMatchByColumnNameCopyBatchInsert;
 import org.embulk.output.snowflake.SnowflakeOutputConnection;
 import org.embulk.output.snowflake.SnowflakeOutputConnector;
 import org.embulk.output.snowflake.StageIdentifier;
@@ -73,8 +73,16 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
     @ConfigDefault("\"none\"")
     public MatchByColumnName getMatchByColumnName();
 
+    public void setInsertColumnNames(String[] insertColumnNames);
+
+    public String[] getInsertColumnNames();
+
+    public void setInsertCSVColumnNums(int[] insertCSVColumnNums);
+
+    public int[] getInsertCSVColumnNums();
+
     public enum MatchByColumnName {
-      // TODO support case_sensitive
+      CASE_SENSITIVE,
       CASE_INSENSITIVE,
       NONE;
 
@@ -87,6 +95,8 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
       @JsonCreator
       public static MatchByColumnName fromString(String value) {
         switch (value) {
+          case "case_sensitive":
+            return CASE_SENSITIVE;
           case "case_insensitive":
             return CASE_INSENSITIVE;
           case "none":
@@ -94,7 +104,8 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
           default:
             throw new ConfigException(
                 String.format(
-                    "Unknown value '%s'. Supported values are case_insensitive, none", value));
+                    "Unknown match_by_column_name '%s'. Supported values are case_sensitive, case_insensitive, none",
+                    value));
         }
       }
     }
@@ -189,6 +200,47 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
       JdbcOutputConnection con, PluginTask task, final Schema schema, int taskCount)
       throws SQLException {
     super.doBegin(con, task, schema, taskCount);
+
+    SnowflakePluginTask pluginTask = (SnowflakePluginTask) task;
+    SnowflakePluginTask.MatchByColumnName matchByColumnName = pluginTask.getMatchByColumnName();
+    if (matchByColumnName == SnowflakePluginTask.MatchByColumnName.NONE) {
+      pluginTask.setInsertCSVColumnNums(new int[0]);
+      pluginTask.setInsertColumnNames(new String[0]);
+      return;
+    }
+
+    List<String> insertColumnNames = new ArrayList<>();
+    List<Integer> insertCSVColumnNums = new ArrayList<>();
+    JdbcSchema targetTableSchema = pluginTask.getTargetTableSchema();
+    BiFunction<String, String, Boolean> compare =
+        matchByColumnName == SnowflakePluginTask.MatchByColumnName.CASE_SENSITIVE
+            ? String::equals
+            : String::equalsIgnoreCase;
+    int columnNum = 1;
+    for (int i = 0; i < targetTableSchema.getCount(); i++) {
+      JdbcColumn targetColumn = targetTableSchema.getColumn(i);
+      if (targetColumn.isSkipColumn()) {
+        continue;
+      }
+      Column schemaColumn = schema.getColumn(i);
+      if (compare.apply(schemaColumn.getName(), targetColumn.getName())) {
+        insertColumnNames.add(targetColumn.getName());
+        insertCSVColumnNums.add(columnNum);
+      }
+      columnNum += 1;
+    }
+    pluginTask.setInsertColumnNames(insertColumnNames.toArray(new String[0]));
+    pluginTask.setInsertCSVColumnNums(insertCSVColumnNums.stream().mapToInt(i -> i).toArray());
+
+    if (task.getMergeKeys().isPresent()
+        && matchByColumnName == SnowflakePluginTask.MatchByColumnName.CASE_INSENSITIVE) {
+      List<String> mergeKeys = new ArrayList<>();
+      for (String mergeKey : task.getMergeKeys().get()) {
+        JdbcColumn targetColumn = targetTableSchema.findColumn(mergeKey).get();
+        mergeKeys.add(targetColumn.getName());
+      }
+      task.setMergeKeys(Optional.of(mergeKeys));
+    }
   }
 
   @Override
@@ -209,40 +261,14 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
     }
     SnowflakePluginTask pluginTask = (SnowflakePluginTask) task;
 
-    SnowflakePluginTask.MatchByColumnName matchByColumnName = pluginTask.getMatchByColumnName();
-    if (matchByColumnName == SnowflakePluginTask.MatchByColumnName.NONE) {
-      return new SnowflakeCopyBatchInsert(
-          getConnector(task, true),
-          this.stageIdentifier,
-          false,
-          pluginTask.getMaxUploadRetries(),
-          pluginTask.getEmtpyFieldAsNull());
-    }
-
-    JdbcSchema existingJdbcSchema;
-    JdbcOutputConnection con = getConnector(task, true).connect(true);
-    Mode mode = task.getMode();
-
-    Optional<JdbcSchema> initialTargetTableSchema =
-        mode.ignoreTargetTableSchema()
-            ? Optional.empty()
-            : newJdbcSchemaFromTableIfExists(con, task.getActualTable());
-    if (initialTargetTableSchema.isPresent()) {
-      existingJdbcSchema = initialTargetTableSchema.get();
-    } else if (task.getIntermediateTables().isPresent()
-        && !task.getIntermediateTables().get().isEmpty()) {
-      TableIdentifier firstItermTable = task.getIntermediateTables().get().get(0);
-      existingJdbcSchema = newJdbcSchemaFromTableIfExists(con, firstItermTable).get();
-    } else {
-      existingJdbcSchema = newJdbcSchemaFromTableIfExists(con, task.getActualTable()).get();
-    }
-    return new SnowflakeMatchByColumnNameCopyBatchInsert(
+    return new SnowflakeCopyBatchInsert(
         getConnector(task, true),
         this.stageIdentifier,
+        pluginTask.getInsertColumnNames(),
+        pluginTask.getInsertCSVColumnNums(),
         false,
         pluginTask.getMaxUploadRetries(),
-        pluginTask.getEmtpyFieldAsNull(),
-        existingJdbcSchema);
+        pluginTask.getEmtpyFieldAsNull());
   }
 
   @Override

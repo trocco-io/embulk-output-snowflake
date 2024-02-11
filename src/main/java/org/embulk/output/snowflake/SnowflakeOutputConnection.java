@@ -21,11 +21,24 @@ public class SnowflakeOutputConnection extends JdbcOutputConnection {
       TableIdentifier tableIdentifier,
       StageIdentifier stageIdentifier,
       String filename,
+      String[] insertColumnNames,
+      int[] csvSelectedColumnNums,
       String delimiterString,
       boolean emptyFieldAsNull)
       throws SQLException {
     String sql =
-        buildCopySQL(tableIdentifier, stageIdentifier, filename, delimiterString, emptyFieldAsNull);
+        insertColumnNames != null && insertColumnNames.length > 0
+            ? buildCopySQL(
+                tableIdentifier,
+                stageIdentifier,
+                filename,
+                insertColumnNames,
+                csvSelectedColumnNums,
+                delimiterString,
+                emptyFieldAsNull)
+            : buildCopySQL(
+                tableIdentifier, stageIdentifier, filename, delimiterString, emptyFieldAsNull);
+
     runUpdate(sql);
   }
 
@@ -180,6 +193,46 @@ public class SnowflakeOutputConnection extends JdbcOutputConnection {
     quoteTableIdentifier(sb, tableIdentifier);
     sb.append(" FROM ");
     quoteInternalStoragePath(sb, stageIdentifier, snowflakeStageFileName);
+    sb.append(" FILE_FORMAT = ( TYPE = CSV FIELD_DELIMITER = '");
+    sb.append(delimiterString);
+    sb.append("'");
+    if (!emptyFieldAsNull) {
+      sb.append(" EMPTY_FIELD_AS_NULL = FALSE");
+    }
+    sb.append(" );");
+    return sb.toString();
+  }
+
+  protected String buildCopySQL(
+      TableIdentifier tableIdentifier,
+      StageIdentifier stageIdentifier,
+      String snowflakeStageFileName,
+      String[] insertColumnNames,
+      int[] csvSelectedColumnNums,
+      String delimiterString,
+      boolean emptyFieldAsNull) {
+    StringBuilder sb = new StringBuilder();
+    sb.append("COPY INTO ");
+    quoteTableIdentifier(sb, tableIdentifier);
+    sb.append(" (");
+    for (int i = 0; i < insertColumnNames.length; i++) {
+      if (i != 0) {
+        sb.append(", ");
+      }
+      String column = quoteIdentifierString(insertColumnNames[i]);
+      sb.append(column);
+    }
+    sb.append(" ) FROM ( SELECT ");
+    for (int i = 0; i < csvSelectedColumnNums.length; i++) {
+      if (i != 0) {
+        sb.append(", ");
+      }
+      sb.append("t.$");
+      sb.append(csvSelectedColumnNums[i]);
+    }
+    sb.append(" from ");
+    quoteInternalStoragePath(sb, stageIdentifier, snowflakeStageFileName);
+    sb.append(" t ) ");
     sb.append(" FILE_FORMAT = ( TYPE = CSV FIELD_DELIMITER = '");
     sb.append(delimiterString);
     sb.append("'");

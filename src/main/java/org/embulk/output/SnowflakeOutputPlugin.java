@@ -230,7 +230,8 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
       columnNumber += 1;
     }
     pluginTask.setCopyIntoTableColumnNames(copyIntoTableColumnNames.toArray(new String[0]));
-    pluginTask.setCopyIntoCSVColumnNumbers(copyIntoCSVColumnNumbers.stream().mapToInt(i -> i).toArray());
+    pluginTask.setCopyIntoCSVColumnNumbers(
+        copyIntoCSVColumnNumbers.stream().mapToInt(i -> i).toArray());
   }
 
   @Override

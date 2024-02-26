@@ -73,13 +73,13 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
     @ConfigDefault("\"none\"")
     public MatchByColumnName getMatchByColumnName();
 
-    public void setInsertColumnNames(String[] insertColumnNames);
+    public void setCopyIntoTableColumnNames(String[] columnNames);
 
-    public String[] getInsertColumnNames();
+    public String[] getCopyIntoTableColumnNames();
 
-    public void setInsertCSVColumnNums(int[] insertCSVColumnNums);
+    public void setCopyIntoCSVColumnNumbers(int[] columnNumbers);
 
-    public int[] getInsertCSVColumnNums();
+    public int[] getCopyIntoCSVColumnNumbers();
 
     public enum MatchByColumnName {
       CASE_SENSITIVE,
@@ -204,19 +204,19 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
     SnowflakePluginTask pluginTask = (SnowflakePluginTask) task;
     SnowflakePluginTask.MatchByColumnName matchByColumnName = pluginTask.getMatchByColumnName();
     if (matchByColumnName == SnowflakePluginTask.MatchByColumnName.NONE) {
-      pluginTask.setInsertCSVColumnNums(new int[0]);
-      pluginTask.setInsertColumnNames(new String[0]);
+      pluginTask.setCopyIntoCSVColumnNumbers(new int[0]);
+      pluginTask.setCopyIntoTableColumnNames(new String[0]);
       return;
     }
 
-    List<String> insertColumnNames = new ArrayList<>();
-    List<Integer> insertCSVColumnNums = new ArrayList<>();
+    List<String> copyIntoTableColumnNames = new ArrayList<>();
+    List<Integer> copyIntoCSVColumnNumbers = new ArrayList<>();
     JdbcSchema targetTableSchema = pluginTask.getTargetTableSchema();
     BiFunction<String, String, Boolean> compare =
         matchByColumnName == SnowflakePluginTask.MatchByColumnName.CASE_SENSITIVE
             ? String::equals
             : String::equalsIgnoreCase;
-    int columnNum = 1;
+    int columnNumber = 1;
     for (int i = 0; i < targetTableSchema.getCount(); i++) {
       JdbcColumn targetColumn = targetTableSchema.getColumn(i);
       if (targetColumn.isSkipColumn()) {
@@ -224,13 +224,13 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
       }
       Column schemaColumn = schema.getColumn(i);
       if (compare.apply(schemaColumn.getName(), targetColumn.getName())) {
-        insertColumnNames.add(targetColumn.getName());
-        insertCSVColumnNums.add(columnNum);
+        copyIntoTableColumnNames.add(targetColumn.getName());
+        copyIntoCSVColumnNumbers.add(columnNumber);
       }
-      columnNum += 1;
+      columnNumber += 1;
     }
-    pluginTask.setInsertColumnNames(insertColumnNames.toArray(new String[0]));
-    pluginTask.setInsertCSVColumnNums(insertCSVColumnNums.stream().mapToInt(i -> i).toArray());
+    pluginTask.setCopyIntoTableColumnNames(copyIntoTableColumnNames.toArray(new String[0]));
+    pluginTask.setCopyIntoCSVColumnNumbers(copyIntoCSVColumnNumbers.stream().mapToInt(i -> i).toArray());
 
     if (task.getMergeKeys().isPresent()
         && matchByColumnName == SnowflakePluginTask.MatchByColumnName.CASE_INSENSITIVE) {
@@ -264,8 +264,8 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
     return new SnowflakeCopyBatchInsert(
         getConnector(task, true),
         this.stageIdentifier,
-        pluginTask.getInsertColumnNames(),
-        pluginTask.getInsertCSVColumnNums(),
+        pluginTask.getCopyIntoTableColumnNames(),
+        pluginTask.getCopyIntoCSVColumnNumbers(),
         false,
         pluginTask.getMaxUploadRetries(),
         pluginTask.getEmtpyFieldAsNull());

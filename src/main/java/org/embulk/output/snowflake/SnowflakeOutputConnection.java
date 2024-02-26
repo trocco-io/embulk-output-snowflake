@@ -21,19 +21,19 @@ public class SnowflakeOutputConnection extends JdbcOutputConnection {
       TableIdentifier tableIdentifier,
       StageIdentifier stageIdentifier,
       String filename,
-      String[] insertColumnNames,
-      int[] csvSelectedColumnNums,
+      String[] tableColumnNames,
+      int[] csvColumnNumbers,
       String delimiterString,
       boolean emptyFieldAsNull)
       throws SQLException {
     String sql =
-        insertColumnNames != null && insertColumnNames.length > 0
+        tableColumnNames != null && tableColumnNames.length > 0
             ? buildCopySQL(
                 tableIdentifier,
                 stageIdentifier,
                 filename,
-                insertColumnNames,
-                csvSelectedColumnNums,
+                tableColumnNames,
+                csvColumnNumbers,
                 delimiterString,
                 emptyFieldAsNull)
             : buildCopySQL(
@@ -207,28 +207,32 @@ public class SnowflakeOutputConnection extends JdbcOutputConnection {
       TableIdentifier tableIdentifier,
       StageIdentifier stageIdentifier,
       String snowflakeStageFileName,
-      String[] insertColumnNames,
-      int[] csvSelectedColumnNums,
+      String[] tableColumnNames,
+      int[] csvColumnNumbers,
       String delimiterString,
       boolean emptyFieldAsNull) {
+    // Data load with transformation
+    // Correspondence between CSV column numbers and table column names can be specified.
+    // https://docs.snowflake.com/ja/sql-reference/sql/copy-into-table
+
     StringBuilder sb = new StringBuilder();
     sb.append("COPY INTO ");
     quoteTableIdentifier(sb, tableIdentifier);
     sb.append(" (");
-    for (int i = 0; i < insertColumnNames.length; i++) {
+    for (int i = 0; i < tableColumnNames.length; i++) {
       if (i != 0) {
         sb.append(", ");
       }
-      String column = quoteIdentifierString(insertColumnNames[i]);
+      String column = quoteIdentifierString(tableColumnNames[i]);
       sb.append(column);
     }
     sb.append(" ) FROM ( SELECT ");
-    for (int i = 0; i < csvSelectedColumnNums.length; i++) {
+    for (int i = 0; i < csvColumnNumbers.length; i++) {
       if (i != 0) {
         sb.append(", ");
       }
       sb.append("t.$");
-      sb.append(csvSelectedColumnNums[i]);
+      sb.append(csvColumnNumbers[i]);
     }
     sb.append(" from ");
     quoteInternalStoragePath(sb, stageIdentifier, snowflakeStageFileName);

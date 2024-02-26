@@ -167,22 +167,6 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
   }
 
   @Override
-  protected void doCommit(JdbcOutputConnection con, PluginTask task, int taskCount)
-      throws SQLException {
-    super.doCommit(con, task, taskCount);
-    SnowflakeOutputConnection snowflakeCon = (SnowflakeOutputConnection) con;
-
-    SnowflakePluginTask t = (SnowflakePluginTask) task;
-    if (this.stageIdentifier == null) {
-      this.stageIdentifier = StageIdentifierHolder.getStageIdentifier(t);
-    }
-
-    if (t.getDeleteStage()) {
-      snowflakeCon.runDropStage(this.stageIdentifier);
-    }
-  }
-
-  @Override
   protected void doBegin(
       JdbcOutputConnection con, PluginTask task, final Schema schema, int taskCount)
       throws SQLException {
@@ -196,16 +180,8 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
       throw new UnsupportedOperationException(
           "Snowflake output plugin doesn't support 'merge_direct' mode.");
     }
-
-    SnowflakePluginTask t = (SnowflakePluginTask) task;
-    // TODO: put some where executes once
-    if (this.stageIdentifier == null) {
-      SnowflakeOutputConnection snowflakeCon =
-          (SnowflakeOutputConnection) getConnector(task, true).connect(true);
-      this.stageIdentifier = StageIdentifierHolder.getStageIdentifier(t);
-      snowflakeCon.runCreateStage(this.stageIdentifier);
-    }
     SnowflakePluginTask pluginTask = (SnowflakePluginTask) task;
+    this.stageIdentifier = StageIdentifierHolder.getStageIdentifier(pluginTask);
 
     return new SnowflakeCopyBatchInsert(
         getConnector(task, true),

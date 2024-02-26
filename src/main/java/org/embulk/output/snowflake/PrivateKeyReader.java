@@ -8,18 +8,31 @@ import net.snowflake.client.jdbc.internal.org.bouncycastle.asn1.pkcs.PrivateKeyI
 import net.snowflake.client.jdbc.internal.org.bouncycastle.jce.provider.BouncyCastleProvider;
 import net.snowflake.client.jdbc.internal.org.bouncycastle.openssl.PEMParser;
 import net.snowflake.client.jdbc.internal.org.bouncycastle.openssl.jcajce.JcaPEMKeyConverter;
+import net.snowflake.client.jdbc.internal.org.bouncycastle.openssl.jcajce.JceOpenSSLPKCS8DecryptorProviderBuilder;
+import net.snowflake.client.jdbc.internal.org.bouncycastle.operator.InputDecryptorProvider;
+import net.snowflake.client.jdbc.internal.org.bouncycastle.operator.OperatorCreationException;
+import net.snowflake.client.jdbc.internal.org.bouncycastle.pkcs.PKCS8EncryptedPrivateKeyInfo;
+import net.snowflake.client.jdbc.internal.org.bouncycastle.pkcs.PKCSException;
 
 // ref:
 // https://docs.snowflake.com/en/developer-guide/jdbc/jdbc-configure#privatekey-property-in-connection-properties
 public class PrivateKeyReader {
-  public static PrivateKey get(String pemString) throws IOException {
+  public static PrivateKey get(String pemString, String passphrase)
+      throws IOException, OperatorCreationException, PKCSException {
     Security.addProvider(new BouncyCastleProvider());
     PEMParser pemParser = new PEMParser(new StringReader(pemString));
     Object pemObject = pemParser.readObject();
     pemParser.close();
 
     PrivateKeyInfo privateKeyInfo;
-    if (pemObject instanceof PrivateKeyInfo) {
+    if (pemObject instanceof PKCS8EncryptedPrivateKeyInfo) {
+      // Handle the case where the private key is encrypted.
+      PKCS8EncryptedPrivateKeyInfo encryptedPrivateKeyInfo =
+          (PKCS8EncryptedPrivateKeyInfo) pemObject;
+      InputDecryptorProvider pkcs8Prov =
+          new JceOpenSSLPKCS8DecryptorProviderBuilder().build(passphrase.toCharArray());
+      privateKeyInfo = encryptedPrivateKeyInfo.decryptPrivateKeyInfo(pkcs8Prov);
+    } else if (pemObject instanceof PrivateKeyInfo) {
       privateKeyInfo = (PrivateKeyInfo) pemObject;
     } else {
       throw new IllegalArgumentException("Provided PEM does not contain a valid Private Key");

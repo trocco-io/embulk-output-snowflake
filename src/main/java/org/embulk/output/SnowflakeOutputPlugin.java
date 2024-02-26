@@ -6,6 +6,7 @@ import java.sql.Types;
 import java.util.*;
 import org.embulk.config.ConfigDiff;
 import org.embulk.config.ConfigException;
+import org.embulk.config.ConfigSource;
 import org.embulk.config.TaskSource;
 import org.embulk.output.jdbc.*;
 import org.embulk.output.snowflake.PrivateKeyReader;
@@ -127,6 +128,36 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
     logConnectionProperties(url, props);
 
     return new SnowflakeOutputConnector(url, props, t.getTransactionIsolation());
+  }
+
+  @Override
+  public ConfigDiff transaction(ConfigSource config,
+          Schema schema, int taskCount,
+          OutputPlugin.Control control)
+  {
+      PluginTask task = CONFIG_MAPPER.map(config, this.getTaskClass());
+      SnowflakePluginTask t = (SnowflakePluginTask) task;
+      this.stageIdentifier = StageIdentifierHolder.getStageIdentifier(t);
+      ConfigDiff configDiff;
+      SnowflakeOutputConnection snowflakeCon = null;
+
+      try {
+        snowflakeCon = (SnowflakeOutputConnection) getConnector(task, true).connect(true);
+        snowflakeCon.runCreateStage(this.stageIdentifier);
+        configDiff = super.transaction(config, schema, taskCount, control);
+      }  catch (SQLException ex) {
+        throw new RuntimeException(ex);
+      }  finally {
+        if (t.getDeleteStage()) {
+          try {
+            snowflakeCon.runDropStage(this.stageIdentifier);
+          }  catch (SQLException ex) {
+            throw new RuntimeException(ex);
+          }
+        }
+      }
+
+      return configDiff;
   }
 
   @Override

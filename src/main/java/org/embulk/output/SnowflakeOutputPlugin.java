@@ -231,16 +231,6 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
     }
     pluginTask.setCopyIntoTableColumnNames(copyIntoTableColumnNames.toArray(new String[0]));
     pluginTask.setCopyIntoCSVColumnNumbers(copyIntoCSVColumnNumbers.stream().mapToInt(i -> i).toArray());
-
-    if (task.getMergeKeys().isPresent()
-        && matchByColumnName == SnowflakePluginTask.MatchByColumnName.CASE_INSENSITIVE) {
-      List<String> mergeKeys = new ArrayList<>();
-      for (String mergeKey : task.getMergeKeys().get()) {
-        JdbcColumn targetColumn = targetTableSchema.findColumn(mergeKey).get();
-        mergeKeys.add(targetColumn.getName());
-      }
-      task.setMergeKeys(Optional.of(mergeKeys));
-    }
   }
 
   @Override

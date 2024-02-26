@@ -131,33 +131,31 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
   }
 
   @Override
-  public ConfigDiff transaction(ConfigSource config,
-          Schema schema, int taskCount,
-          OutputPlugin.Control control)
-  {
-      PluginTask task = CONFIG_MAPPER.map(config, this.getTaskClass());
-      SnowflakePluginTask t = (SnowflakePluginTask) task;
-      this.stageIdentifier = StageIdentifierHolder.getStageIdentifier(t);
-      ConfigDiff configDiff;
-      SnowflakeOutputConnection snowflakeCon = null;
+  public ConfigDiff transaction(
+      ConfigSource config, Schema schema, int taskCount, OutputPlugin.Control control) {
+    PluginTask task = CONFIG_MAPPER.map(config, this.getTaskClass());
+    SnowflakePluginTask t = (SnowflakePluginTask) task;
+    this.stageIdentifier = StageIdentifierHolder.getStageIdentifier(t);
+    ConfigDiff configDiff;
+    SnowflakeOutputConnection snowflakeCon = null;
 
-      try {
-        snowflakeCon = (SnowflakeOutputConnection) getConnector(task, true).connect(true);
-        snowflakeCon.runCreateStage(this.stageIdentifier);
-        configDiff = super.transaction(config, schema, taskCount, control);
-      }  catch (SQLException ex) {
-        throw new RuntimeException(ex);
-      }  finally {
-        if (t.getDeleteStage()) {
-          try {
-            snowflakeCon.runDropStage(this.stageIdentifier);
-          }  catch (SQLException ex) {
-            throw new RuntimeException(ex);
-          }
+    try {
+      snowflakeCon = (SnowflakeOutputConnection) getConnector(task, true).connect(true);
+      snowflakeCon.runCreateStage(this.stageIdentifier);
+      configDiff = super.transaction(config, schema, taskCount, control);
+    } catch (SQLException ex) {
+      throw new RuntimeException(ex);
+    } finally {
+      if (t.getDeleteStage()) {
+        try {
+          snowflakeCon.runDropStage(this.stageIdentifier);
+        } catch (SQLException ex) {
+          throw new RuntimeException(ex);
         }
       }
+    }
 
-      return configDiff;
+    return configDiff;
   }
 
   @Override

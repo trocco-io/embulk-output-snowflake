@@ -19,6 +19,7 @@ Snowflake output plugin for Embulk loads records to Snowflake.
 - **database**: destination database name (string, required)
 - **schema**: destination schema name (string, default: "public")
 - **table**: destination table name (string, required)
+- **role**: role to execute queries (string, default: "")
 - **retry_limit**: max retry count for database operations (integer, default: 12). When intermediate table to create already created by another process, this plugin will retry with another table name to avoid collision.
 - **retry_wait**: initial retry wait time in milliseconds (integer, default: 1000 (1 second))
 - **max_retry_wait**: upper limit of retry wait, which will be doubled at every retry (integer, default: 1800000 (30 minutes))

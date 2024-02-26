@@ -208,6 +208,7 @@ public class TestSnowflakeOutputPlugin {
     assertEquals("", task.getUser());
     assertEquals("", task.getPassword());
     assertEquals("public", task.getSchema());
+    assertEquals("", task.getRole());
     assertEquals(false, task.getDeleteStage());
   }
 

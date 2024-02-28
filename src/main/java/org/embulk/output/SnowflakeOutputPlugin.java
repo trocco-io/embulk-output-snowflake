@@ -147,9 +147,11 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
       snowflakeCon = (SnowflakeOutputConnection) getConnector(task, true).connect(true);
       snowflakeCon.runCreateStage(this.stageIdentifier);
       configDiff = super.transaction(config, schema, taskCount, control);
-      snowflakeCon.runDropStage(this.stageIdentifier);
+      if (t.getDeleteStage()) {
+        snowflakeCon.runDropStage(this.stageIdentifier);
+      }
     } catch (Exception e) {
-      if (t.getDeleteStageOnError()) {
+      if (t.getDeleteStage() && t.getDeleteStageOnError()) {
         try {
           snowflakeCon.runDropStage(this.stageIdentifier);
         } catch (SQLException ex) {

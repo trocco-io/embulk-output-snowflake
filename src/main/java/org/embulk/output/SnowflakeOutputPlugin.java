@@ -66,6 +66,10 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
     @Config("empty_field_as_null")
     @ConfigDefault("true")
     public boolean getEmtpyFieldAsNull();
+
+    @Config("delete_stage_on_error")
+    @ConfigDefault("false")
+    public boolean getDeleteStageOnError();
   }
 
   @Override
@@ -143,16 +147,16 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
       snowflakeCon = (SnowflakeOutputConnection) getConnector(task, true).connect(true);
       snowflakeCon.runCreateStage(this.stageIdentifier);
       configDiff = super.transaction(config, schema, taskCount, control);
-    } catch (SQLException ex) {
-      throw new RuntimeException(ex);
-    } finally {
-      if (t.getDeleteStage()) {
+      snowflakeCon.runDropStage(this.stageIdentifier);
+    } catch (Exception e) {
+      if (t.getDeleteStageOnError()) {
         try {
           snowflakeCon.runDropStage(this.stageIdentifier);
         } catch (SQLException ex) {
           throw new RuntimeException(ex);
         }
       }
+      throw new RuntimeException(e);
     }
 
     return configDiff;

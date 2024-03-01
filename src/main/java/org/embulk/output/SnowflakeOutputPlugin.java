@@ -23,8 +23,6 @@ import org.embulk.util.config.Config;
 import org.embulk.util.config.ConfigDefault;
 
 public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
-  private StageIdentifier stageIdentifier;
-
   public interface SnowflakePluginTask extends PluginTask {
     @Config("driver_path")
     @ConfigDefault("null")
@@ -139,21 +137,21 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
       ConfigSource config, Schema schema, int taskCount, OutputPlugin.Control control) {
     PluginTask task = CONFIG_MAPPER.map(config, this.getTaskClass());
     SnowflakePluginTask t = (SnowflakePluginTask) task;
-    this.stageIdentifier = StageIdentifierHolder.getStageIdentifier(t);
+    StageIdentifier stageIdentifier = StageIdentifierHolder.getStageIdentifier(t);
     ConfigDiff configDiff;
     SnowflakeOutputConnection snowflakeCon = null;
 
     try {
       snowflakeCon = (SnowflakeOutputConnection) getConnector(task, true).connect(true);
-      snowflakeCon.runCreateStage(this.stageIdentifier);
+      snowflakeCon.runCreateStage(stageIdentifier);
       configDiff = super.transaction(config, schema, taskCount, control);
       if (t.getDeleteStage()) {
-        snowflakeCon.runDropStage(this.stageIdentifier);
+        snowflakeCon.runDropStage(stageIdentifier);
       }
     } catch (Exception e) {
       if (t.getDeleteStage() && t.getDeleteStageOnError()) {
         try {
-          snowflakeCon.runDropStage(this.stageIdentifier);
+          snowflakeCon.runDropStage(stageIdentifier);
         } catch (SQLException ex) {
           throw new RuntimeException(ex);
         }
@@ -185,11 +183,10 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
           "Snowflake output plugin doesn't support 'merge_direct' mode.");
     }
     SnowflakePluginTask pluginTask = (SnowflakePluginTask) task;
-    this.stageIdentifier = StageIdentifierHolder.getStageIdentifier(pluginTask);
 
     return new SnowflakeCopyBatchInsert(
         getConnector(task, true),
-        this.stageIdentifier,
+        StageIdentifierHolder.getStageIdentifier(pluginTask),
         false,
         pluginTask.getMaxUploadRetries(),
         pluginTask.getEmtpyFieldAsNull());

@@ -8,6 +8,7 @@ import net.snowflake.client.jdbc.internal.org.bouncycastle.operator.OperatorCrea
 import net.snowflake.client.jdbc.internal.org.bouncycastle.pkcs.PKCSException;
 import org.embulk.config.ConfigDiff;
 import org.embulk.config.ConfigException;
+import org.embulk.config.ConfigSource;
 import org.embulk.config.TaskSource;
 import org.embulk.output.jdbc.*;
 import org.embulk.output.snowflake.PrivateKeyReader;
@@ -24,8 +25,6 @@ import org.embulk.util.config.Config;
 import org.embulk.util.config.ConfigDefault;
 
 public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
-  private StageIdentifier stageIdentifier;
-
   public interface SnowflakePluginTask extends PluginTask {
     @Config("driver_path")
     @ConfigDefault("null")
@@ -75,6 +74,10 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
     @Config("empty_field_as_null")
     @ConfigDefault("true")
     public boolean getEmtpyFieldAsNull();
+
+    @Config("delete_stage_on_error")
+    @ConfigDefault("false")
+    public boolean getDeleteStageOnError();
   }
 
   @Override
@@ -144,25 +147,39 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
   }
 
   @Override
-  public ConfigDiff resume(
-      TaskSource taskSource, Schema schema, int taskCount, OutputPlugin.Control control) {
-    throw new UnsupportedOperationException("snowflake output plugin does not support resuming");
+  public ConfigDiff transaction(
+      ConfigSource config, Schema schema, int taskCount, OutputPlugin.Control control) {
+    PluginTask task = CONFIG_MAPPER.map(config, this.getTaskClass());
+    SnowflakePluginTask t = (SnowflakePluginTask) task;
+    StageIdentifier stageIdentifier = StageIdentifierHolder.getStageIdentifier(t);
+    ConfigDiff configDiff;
+    SnowflakeOutputConnection snowflakeCon = null;
+
+    try {
+      snowflakeCon = (SnowflakeOutputConnection) getConnector(task, true).connect(true);
+      snowflakeCon.runCreateStage(stageIdentifier);
+      configDiff = super.transaction(config, schema, taskCount, control);
+      if (t.getDeleteStage()) {
+        snowflakeCon.runDropStage(stageIdentifier);
+      }
+    } catch (Exception e) {
+      if (t.getDeleteStage() && t.getDeleteStageOnError()) {
+        try {
+          snowflakeCon.runDropStage(stageIdentifier);
+        } catch (SQLException ex) {
+          throw new RuntimeException(ex);
+        }
+      }
+      throw new RuntimeException(e);
+    }
+
+    return configDiff;
   }
 
   @Override
-  protected void doCommit(JdbcOutputConnection con, PluginTask task, int taskCount)
-      throws SQLException {
-    super.doCommit(con, task, taskCount);
-    SnowflakeOutputConnection snowflakeCon = (SnowflakeOutputConnection) con;
-
-    SnowflakePluginTask t = (SnowflakePluginTask) task;
-    if (this.stageIdentifier == null) {
-      this.stageIdentifier = StageIdentifierHolder.getStageIdentifier(t);
-    }
-
-    if (t.getDeleteStage()) {
-      snowflakeCon.runDropStage(this.stageIdentifier);
-    }
+  public ConfigDiff resume(
+      TaskSource taskSource, Schema schema, int taskCount, OutputPlugin.Control control) {
+    throw new UnsupportedOperationException("snowflake output plugin does not support resuming");
   }
 
   @Override
@@ -179,20 +196,11 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
       throw new UnsupportedOperationException(
           "Snowflake output plugin doesn't support 'merge_direct' mode.");
     }
-
-    SnowflakePluginTask t = (SnowflakePluginTask) task;
-    // TODO: put some where executes once
-    if (this.stageIdentifier == null) {
-      SnowflakeOutputConnection snowflakeCon =
-          (SnowflakeOutputConnection) getConnector(task, true).connect(true);
-      this.stageIdentifier = StageIdentifierHolder.getStageIdentifier(t);
-      snowflakeCon.runCreateStage(this.stageIdentifier);
-    }
     SnowflakePluginTask pluginTask = (SnowflakePluginTask) task;
 
     return new SnowflakeCopyBatchInsert(
         getConnector(task, true),
-        this.stageIdentifier,
+        StageIdentifierHolder.getStageIdentifier(pluginTask),
         false,
         pluginTask.getMaxUploadRetries(),
         pluginTask.getEmtpyFieldAsNull());

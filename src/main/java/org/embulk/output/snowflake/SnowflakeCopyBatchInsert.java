@@ -61,7 +61,6 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
   @Override
   public void prepare(TableIdentifier loadTable, JdbcSchema insertSchema) throws SQLException {
     this.connection = (SnowflakeOutputConnection) connector.connect(true);
-    this.connection.runCreateStage(stageIdentifier);
     this.tableIdentifier = loadTable;
   }
 

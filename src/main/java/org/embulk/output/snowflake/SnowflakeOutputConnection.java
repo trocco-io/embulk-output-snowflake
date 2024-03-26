@@ -11,8 +11,12 @@ import org.embulk.output.jdbc.JdbcOutputConnection;
 import org.embulk.output.jdbc.JdbcSchema;
 import org.embulk.output.jdbc.MergeConfig;
 import org.embulk.output.jdbc.TableIdentifier;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class SnowflakeOutputConnection extends JdbcOutputConnection {
+  private final Logger logger = LoggerFactory.getLogger(SnowflakeOutputConnection.class);
+
   public SnowflakeOutputConnection(Connection connection) throws SQLException {
     super(connection, null);
   }
@@ -45,11 +49,13 @@ public class SnowflakeOutputConnection extends JdbcOutputConnection {
   public void runCreateStage(StageIdentifier stageIdentifier) throws SQLException {
     String sql = buildCreateStageSQL(stageIdentifier);
     runUpdate(sql);
+    logger.info("SQL: {}", sql);
   }
 
   public void runDropStage(StageIdentifier stageIdentifier) throws SQLException {
     String sql = buildDropStageSQL(stageIdentifier);
     runUpdate(sql);
+    logger.info("SQL: {}", sql);
   }
 
   public void runUploadFile(

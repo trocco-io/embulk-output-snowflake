@@ -1,9 +1,12 @@
 package org.embulk.output;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonValue;
 import java.io.IOException;
 import java.sql.SQLException;
 import java.sql.Types;
 import java.util.*;
+import java.util.function.BiFunction;
 import net.snowflake.client.jdbc.internal.org.bouncycastle.operator.OperatorCreationException;
 import net.snowflake.client.jdbc.internal.org.bouncycastle.pkcs.PKCSException;
 import org.embulk.config.ConfigDiff;
@@ -78,6 +81,47 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
     @Config("delete_stage_on_error")
     @ConfigDefault("false")
     public boolean getDeleteStageOnError();
+
+    @Config("match_by_column_name")
+    @ConfigDefault("\"none\"")
+    public MatchByColumnName getMatchByColumnName();
+
+    public void setCopyIntoTableColumnNames(String[] columnNames);
+
+    public String[] getCopyIntoTableColumnNames();
+
+    public void setCopyIntoCSVColumnNumbers(int[] columnNumbers);
+
+    public int[] getCopyIntoCSVColumnNumbers();
+
+    public enum MatchByColumnName {
+      CASE_SENSITIVE,
+      CASE_INSENSITIVE,
+      NONE;
+
+      @JsonValue
+      @Override
+      public String toString() {
+        return name().toLowerCase(Locale.ENGLISH);
+      }
+
+      @JsonCreator
+      public static MatchByColumnName fromString(String value) {
+        switch (value) {
+          case "case_sensitive":
+            return CASE_SENSITIVE;
+          case "case_insensitive":
+            return CASE_INSENSITIVE;
+          case "none":
+            return NONE;
+          default:
+            throw new ConfigException(
+                String.format(
+                    "Unknown match_by_column_name '%s'. Supported values are case_sensitive, case_insensitive, none",
+                    value));
+        }
+      }
+    }
   }
 
   @Override
@@ -187,6 +231,38 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
       JdbcOutputConnection con, PluginTask task, final Schema schema, int taskCount)
       throws SQLException {
     super.doBegin(con, task, schema, taskCount);
+
+    SnowflakePluginTask pluginTask = (SnowflakePluginTask) task;
+    SnowflakePluginTask.MatchByColumnName matchByColumnName = pluginTask.getMatchByColumnName();
+    if (matchByColumnName == SnowflakePluginTask.MatchByColumnName.NONE) {
+      pluginTask.setCopyIntoCSVColumnNumbers(new int[0]);
+      pluginTask.setCopyIntoTableColumnNames(new String[0]);
+      return;
+    }
+
+    List<String> copyIntoTableColumnNames = new ArrayList<>();
+    List<Integer> copyIntoCSVColumnNumbers = new ArrayList<>();
+    JdbcSchema targetTableSchema = pluginTask.getTargetTableSchema();
+    BiFunction<String, String, Boolean> compare =
+        matchByColumnName == SnowflakePluginTask.MatchByColumnName.CASE_SENSITIVE
+            ? String::equals
+            : String::equalsIgnoreCase;
+    int columnNumber = 1;
+    for (int i = 0; i < targetTableSchema.getCount(); i++) {
+      JdbcColumn targetColumn = targetTableSchema.getColumn(i);
+      if (targetColumn.isSkipColumn()) {
+        continue;
+      }
+      Column schemaColumn = schema.getColumn(i);
+      if (compare.apply(schemaColumn.getName(), targetColumn.getName())) {
+        copyIntoTableColumnNames.add(targetColumn.getName());
+        copyIntoCSVColumnNumbers.add(columnNumber);
+      }
+      columnNumber += 1;
+    }
+    pluginTask.setCopyIntoTableColumnNames(copyIntoTableColumnNames.toArray(new String[0]));
+    pluginTask.setCopyIntoCSVColumnNumbers(
+        copyIntoCSVColumnNumbers.stream().mapToInt(i -> i).toArray());
   }
 
   @Override
@@ -201,6 +277,8 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
     return new SnowflakeCopyBatchInsert(
         getConnector(task, true),
         StageIdentifierHolder.getStageIdentifier(pluginTask),
+        pluginTask.getCopyIntoTableColumnNames(),
+        pluginTask.getCopyIntoCSVColumnNumbers(),
         false,
         pluginTask.getMaxUploadRetries(),
         pluginTask.getEmtpyFieldAsNull());

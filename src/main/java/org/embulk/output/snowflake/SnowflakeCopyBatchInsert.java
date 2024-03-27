@@ -40,9 +40,15 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
   private List<Future<Void>> uploadAndCopyFutures;
   private boolean emptyFieldAsNull;
 
+  private String[] copyIntoTableColumnNames;
+
+  private int[] copyIntoCSVColumnNumbers;
+
   public SnowflakeCopyBatchInsert(
       JdbcOutputConnector connector,
       StageIdentifier stageIdentifier,
+      String[] copyIntoTableColumnNames,
+      int[] copyIntoCSVColumnNumbers,
       boolean deleteStageFile,
       int maxUploadRetries,
       boolean emptyFieldAsNull)
@@ -51,6 +57,8 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
     openNewFile();
     this.connector = connector;
     this.stageIdentifier = stageIdentifier;
+    this.copyIntoTableColumnNames = copyIntoTableColumnNames;
+    this.copyIntoCSVColumnNumbers = copyIntoCSVColumnNumbers;
     this.executorService = Executors.newCachedThreadPool();
     this.deleteStageFile = deleteStageFile;
     this.uploadAndCopyFutures = new ArrayList();
@@ -417,6 +425,8 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
               tableIdentifier,
               stageIdentifier,
               snowflakeStageFileName,
+              copyIntoTableColumnNames,
+              copyIntoCSVColumnNumbers,
               delimiterString,
               emptyFieldAsNull);
 

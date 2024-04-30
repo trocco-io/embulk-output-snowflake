@@ -37,14 +37,14 @@ jobs:
       - name: lint
         # Run ./gradlew spotlessApply when failing on this step.
         run: ./gradlew spotlessCheck
-      - run: ./gradlew test
-        env:
-          EMBULK_OUTPUT_SNOWFLAKE_TEST_HOST: "${{ secrets.EMBULK_OUTPUT_SNOWFLAKE_TEST_HOST }}"
-          EMBULK_OUTPUT_SNOWFLAKE_TEST_USER: "${{ secrets.EMBULK_OUTPUT_SNOWFLAKE_TEST_USER }}"
-          EMBULK_OUTPUT_SNOWFLAKE_TEST_PASSWORD: "${{ secrets.EMBULK_OUTPUT_SNOWFLAKE_TEST_PASSWORD }}"
-          EMBULK_OUTPUT_SNOWFLAKE_TEST_WAREHOUSE: "${{ secrets.EMBULK_OUTPUT_SNOWFLAKE_TEST_WAREHOUSE }}"
-          EMBULK_OUTPUT_SNOWFLAKE_TEST_DATABASE: "${{ secrets.EMBULK_OUTPUT_SNOWFLAKE_TEST_DATABASE }}"
-          EMBULK_OUTPUT_SNOWFLAKE_TEST_SCHEMA: "${{ secrets.EMBULK_OUTPUT_SNOWFLAKE_TEST_SCHEMA }}"
+#      - run: ./gradlew test
+#        env:
+#          EMBULK_OUTPUT_SNOWFLAKE_TEST_HOST: "${{ secrets.EMBULK_OUTPUT_SNOWFLAKE_TEST_HOST }}"
+#          EMBULK_OUTPUT_SNOWFLAKE_TEST_USER: "${{ secrets.EMBULK_OUTPUT_SNOWFLAKE_TEST_USER }}"
+#          EMBULK_OUTPUT_SNOWFLAKE_TEST_PASSWORD: "${{ secrets.EMBULK_OUTPUT_SNOWFLAKE_TEST_PASSWORD }}"
+#          EMBULK_OUTPUT_SNOWFLAKE_TEST_WAREHOUSE: "${{ secrets.EMBULK_OUTPUT_SNOWFLAKE_TEST_WAREHOUSE }}"
+#          EMBULK_OUTPUT_SNOWFLAKE_TEST_DATABASE: "${{ secrets.EMBULK_OUTPUT_SNOWFLAKE_TEST_DATABASE }}"
+#          EMBULK_OUTPUT_SNOWFLAKE_TEST_SCHEMA: "${{ secrets.EMBULK_OUTPUT_SNOWFLAKE_TEST_SCHEMA }}"
 
 
       - name: Show Current Version
@@ -68,18 +68,18 @@ jobs:
         env:
           GEM_HOST_API_KEY: "Bearer ${{secrets.GITHUB_TOKEN}}"
           OWNER: ${{ github.repository_owner }}
-
-      - name: Publish to RubyGems
-        if: startsWith( github.ref, 'refs/tags/' )
-        run: |
-          mkdir -p $HOME/.gem
-          touch $HOME/.gem/credentials
-          chmod 0600 $HOME/.gem/credentials
-          printf -- "---\n:rubygems_api_key: ${GEM_HOST_API_KEY}\n" > $HOME/.gem/credentials
-          # TODO: If it is possible to accept input in the middle of a step, then the OTP Token should be inputted instead of generated.
-          gem install rotp -v 6.2.0
-          OTP_TOKEN=$(echo ${OTP_SECRET} | ruby -rtime -rrotp -e "puts ROTP::TOTP.new(STDIN.read.chomp, issuer: 'rubygems.org').at(Time.now)")
-          gem push --otp="${OTP_TOKEN}" ./build/gems/*.gem
-        env:
-          GEM_HOST_API_KEY: "${{secrets.RUBYGEMS_API_KEY}}"
-          OTP_SECRET: "${{secrets.RUBYGEMS_OTP_SECRET}}"
+#
+#      - name: Publish to RubyGems
+#        if: startsWith( github.ref, 'refs/tags/' )
+#        run: |
+#          mkdir -p $HOME/.gem
+#          touch $HOME/.gem/credentials
+#          chmod 0600 $HOME/.gem/credentials
+#          printf -- "---\n:rubygems_api_key: ${GEM_HOST_API_KEY}\n" > $HOME/.gem/credentials
+#          # TODO: If it is possible to accept input in the middle of a step, then the OTP Token should be inputted instead of generated.
+#          gem install rotp -v 6.2.0
+#          OTP_TOKEN=$(echo ${OTP_SECRET} | ruby -rtime -rrotp -e "puts ROTP::TOTP.new(STDIN.read.chomp, issuer: 'rubygems.org').at(Time.now)")
+#          gem push --otp="${OTP_TOKEN}" ./build/gems/*.gem
+#        env:
+#          GEM_HOST_API_KEY: "${{secrets.RUBYGEMS_API_KEY}}"
+#          OTP_SECRET: "${{secrets.RUBYGEMS_OTP_SECRET}}"

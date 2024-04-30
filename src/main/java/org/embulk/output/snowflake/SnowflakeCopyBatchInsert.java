@@ -110,72 +110,95 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
   }
 
   public void setNull(int sqlType) throws IOException {
+    logger.info("setNull({})", sqlType);
     appendDelimiter();
     writer.write(nullString);
     nextColumn(0);
   }
 
   public void setBoolean(boolean v) throws IOException {
+    logger.info("setBoolean({})", v);
+
     appendDelimiter();
     writer.write(String.valueOf(v));
     nextColumn(1);
   }
 
   public void setByte(byte v) throws IOException {
+    logger.info("setByte({})", v);
+
     appendDelimiter();
     setEscapedString(String.valueOf(v));
     nextColumn(1);
   }
 
   public void setShort(short v) throws IOException {
+    logger.info("setShort({})", v);
+
     appendDelimiter();
     writer.write(String.valueOf(v));
     nextColumn(2);
   }
 
   public void setInt(int v) throws IOException {
+    logger.info("setInt({})", v);
+
     appendDelimiter();
     writer.write(String.valueOf(v));
     nextColumn(4);
   }
 
   public void setLong(long v) throws IOException {
+    logger.info("setLong({})", v);
+
     appendDelimiter();
     writer.write(String.valueOf(v));
     nextColumn(8);
   }
 
   public void setFloat(float v) throws IOException {
+    logger.info("setFloat({})", v);
+
     appendDelimiter();
     writer.write(String.valueOf(v));
     nextColumn(4);
   }
 
   public void setDouble(double v) throws IOException {
+    logger.info("setDouble({})", v);
+
     appendDelimiter();
     writer.write(String.valueOf(v));
     nextColumn(8);
   }
 
   public void setBigDecimal(BigDecimal v) throws IOException {
+    logger.info("setBigDecimal({})", v);
+
     appendDelimiter();
     writer.write(String.valueOf(v));
     nextColumn((v.precision() & ~2) / 2 + 8);
   }
 
   public void setString(String v) throws IOException {
+    logger.info("setString({})", v);
+
     appendDelimiter();
     setEscapedString(v);
     nextColumn(v.length() * 2 + 4);
   }
 
   public void setNString(String v) throws IOException {
+    logger.info("setNString({})", v);
+
     appendDelimiter();
     setEscapedString(v);
     nextColumn(v.length() * 2 + 4);
   }
 
   public void setBytes(byte[] v) throws IOException {
+    logger.info("setBytes({})", v);
+
     appendDelimiter();
     setEscapedString(String.valueOf(v));
     nextColumn(v.length + 4);
@@ -183,6 +206,8 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
 
   @Override
   public void setSqlDate(final Instant v, final Calendar cal) throws IOException {
+    logger.info("setSqlDate({}/{})", v, cal);
+
     appendDelimiter();
     cal.setTimeInMillis(v.getEpochSecond() * 1000);
     String f =
@@ -198,6 +223,8 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
 
   @Override
   public void setSqlTime(final Instant v, final Calendar cal) throws IOException {
+    logger.info("setSqlTime({}/{})", v, cal);
+
     appendDelimiter();
     cal.setTimeInMillis(v.getEpochSecond() * 1000);
     String f =
@@ -218,6 +245,8 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
 
   @Override
   public void setSqlTimestamp(final Instant v, final Calendar cal) throws IOException {
+    logger.info("setSqlTimestamp({}/{})", v, cal);
+
     appendDelimiter();
     cal.setTimeInMillis(v.getEpochSecond() * 1000);
     int zoneOffset =
@@ -245,6 +274,8 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
   }
 
   private void setEscapedString(String v) throws IOException {
+    logger.info("setEscapedString({})", v);
+
     for (char c : v.toCharArray()) {
       writer.write(escape(c));
     }

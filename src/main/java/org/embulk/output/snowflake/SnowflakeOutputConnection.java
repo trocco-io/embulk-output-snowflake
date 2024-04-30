@@ -75,6 +75,7 @@ public class SnowflakeOutputConnection extends JdbcOutputConnection {
 
   @Override
   protected String buildColumnTypeName(JdbcColumn c) {
+    logger.info("buildColumnTypeName type: {}, name: {}", c.getSqlType(), c.getName());
     switch (c.getSimpleTypeName()) {
       case "CLOB":
         return "VARCHAR(65535)";

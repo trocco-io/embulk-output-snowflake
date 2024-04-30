@@ -65,3 +65,4 @@ Snowflake output plugin for Embulk loads records to Snowflake.
 ```
 $ ./gradlew gem  # -t to watch change of files and rebuild continuously
 ```
+

@@ -185,6 +185,12 @@ public class TestSnowflakeOutputPlugin {
             }));
   }
 
+  private List<String> createLines(String header, String... data) {
+    // Remove hacking double column after merging https://github.com/embulk/embulk/pull/1476.
+    return Stream.concat(Stream.of(header + ",_index:double"), Stream.of(data).map(s -> s + ",1.0"))
+        .collect(Collectors.toList());
+  }
+
   @After
   public void after() {
     dropAllTemporaryTables();
@@ -681,6 +687,252 @@ public class TestSnowflakeOutputPlugin {
             }));
     List<String> expected =
         Stream.of("0.0,aaa", "0.1,bbb", "1.2,ccc", "1.3,eee").collect(Collectors.toList());
+    for (int i = 0; i < results.size(); i++) {
+      assertEquals(expected.get(i), results.get(i));
+    }
+  }
+
+  @Test
+  public void testRuntimeWithMatchByColumnNameNone() throws IOException {
+    File in = testFolder.newFile(SnowflakeUtils.randomString(8) + ".csv");
+    List<String> lines = createLines("c1:string,c0:string", "111,aaa", "222,bbb", "333,ccc");
+    Files.write(in.toPath(), lines);
+
+    String targetTableName = generateTemporaryTableName();
+    String targetTableFullName =
+        String.format(
+            "\"%s\".\"%s\".\"%s\"", TEST_SNOWFLAKE_DB, TEST_SNOWFLAKE_SCHEMA, targetTableName);
+    runQuery(
+        String.format("create table %s (\"c0\" STRING, \"c1\" STRING)", targetTableFullName),
+        foreachResult(rs_ -> {}));
+
+    final ConfigSource config =
+        CONFIG_MAPPER_FACTORY
+            .newConfigSource()
+            .set("type", "snowflake")
+            .set("user", TEST_SNOWFLAKE_USER)
+            .set("password", TEST_SNOWFLAKE_PASSWORD)
+            .set("host", TEST_SNOWFLAKE_HOST)
+            .set("database", TEST_SNOWFLAKE_DB)
+            .set("warehouse", TEST_SNOWFLAKE_WAREHOUSE)
+            .set("schema", TEST_SNOWFLAKE_SCHEMA)
+            .set("mode", "insert")
+            .set("table", targetTableName);
+    embulk.runOutput(config, in.toPath());
+
+    runQuery(
+        String.format("select count(*) from %s;", targetTableFullName),
+        foreachResult(
+            rs -> {
+              assertEquals(3, rs.getInt(1));
+            }));
+    List<String> results = new ArrayList();
+    runQuery(
+        "select \"c0\",\"c1\" from " + targetTableFullName + " order by 1",
+        foreachResult(
+            rs -> {
+              results.add(rs.getString(1) + "," + rs.getString(2));
+            }));
+    List<String> expected = Stream.of("111,aaa", "222,bbb", "333,ccc").collect(Collectors.toList());
+    for (int i = 0; i < results.size(); i++) {
+      assertEquals(expected.get(i), results.get(i));
+    }
+  }
+
+  @Test
+  public void testRuntimeWithMatchByColumnNameCaseSensitive() throws IOException {
+    File in = testFolder.newFile(SnowflakeUtils.randomString(8) + ".csv");
+    List<String> lines = createLines("c1:string,C0:string", "111,aaa", "222,bbb", "333,ccc");
+    Files.write(in.toPath(), lines);
+
+    String targetTableName = generateTemporaryTableName();
+    String targetTableFullName =
+        String.format(
+            "\"%s\".\"%s\".\"%s\"", TEST_SNOWFLAKE_DB, TEST_SNOWFLAKE_SCHEMA, targetTableName);
+    runQuery(
+        String.format("create table %s (\"c0\" STRING, \"c1\" STRING)", targetTableFullName),
+        foreachResult(rs_ -> {}));
+
+    final ConfigSource config =
+        CONFIG_MAPPER_FACTORY
+            .newConfigSource()
+            .set("type", "snowflake")
+            .set("user", TEST_SNOWFLAKE_USER)
+            .set("password", TEST_SNOWFLAKE_PASSWORD)
+            .set("host", TEST_SNOWFLAKE_HOST)
+            .set("database", TEST_SNOWFLAKE_DB)
+            .set("warehouse", TEST_SNOWFLAKE_WAREHOUSE)
+            .set("schema", TEST_SNOWFLAKE_SCHEMA)
+            .set("mode", "insert")
+            .set("match_by_column_name", "case_sensitive")
+            .set("table", targetTableName);
+    embulk.runOutput(config, in.toPath());
+
+    runQuery(
+        String.format("select count(*) from %s;", targetTableFullName),
+        foreachResult(
+            rs -> {
+              assertEquals(3, rs.getInt(1));
+            }));
+    List<String> results = new ArrayList();
+    runQuery(
+        "select \"c0\",\"c1\" from " + targetTableFullName + " order by 1",
+        foreachResult(
+            rs -> {
+              results.add(rs.getString(1) + "," + rs.getString(2));
+            }));
+    List<String> expected =
+        Stream.of("null,111", "null,222", "null,333").collect(Collectors.toList());
+    for (int i = 0; i < results.size(); i++) {
+      assertEquals(expected.get(i), results.get(i));
+    }
+  }
+
+  @Test
+  public void testRuntimeWithMatchByColumnNameCaseSensitiveSkipWhenNoMatchColumnName()
+      throws IOException {
+    File in = testFolder.newFile(SnowflakeUtils.randomString(8) + ".csv");
+    List<String> lines = createLines("only_csv:string,c0:string", "111,aaa", "222,bbb", "333,ccc");
+    Files.write(in.toPath(), lines);
+
+    String targetTableName = generateTemporaryTableName();
+    String targetTableFullName =
+        String.format(
+            "\"%s\".\"%s\".\"%s\"", TEST_SNOWFLAKE_DB, TEST_SNOWFLAKE_SCHEMA, targetTableName);
+    runQuery(
+        String.format(
+            "create table %s (\"c0\" STRING, \"only_table\" STRING)", targetTableFullName),
+        foreachResult(rs_ -> {}));
+
+    final ConfigSource config =
+        CONFIG_MAPPER_FACTORY
+            .newConfigSource()
+            .set("type", "snowflake")
+            .set("user", TEST_SNOWFLAKE_USER)
+            .set("password", TEST_SNOWFLAKE_PASSWORD)
+            .set("host", TEST_SNOWFLAKE_HOST)
+            .set("database", TEST_SNOWFLAKE_DB)
+            .set("warehouse", TEST_SNOWFLAKE_WAREHOUSE)
+            .set("schema", TEST_SNOWFLAKE_SCHEMA)
+            .set("mode", "insert")
+            .set("match_by_column_name", "case_sensitive")
+            .set("table", targetTableName);
+    embulk.runOutput(config, in.toPath());
+
+    runQuery(
+        String.format("select count(*) from %s;", targetTableFullName),
+        foreachResult(
+            rs -> {
+              assertEquals(3, rs.getInt(1));
+            }));
+    List<String> results = new ArrayList();
+    runQuery(
+        "select \"c0\",\"only_table\" from " + targetTableFullName + " order by 1",
+        foreachResult(
+            rs -> {
+              results.add(rs.getString(1) + "," + rs.getString(2));
+            }));
+    List<String> expected =
+        Stream.of("aaa,null", "bbb,null", "ccc,null").collect(Collectors.toList());
+    for (int i = 0; i < results.size(); i++) {
+      assertEquals(expected.get(i), results.get(i));
+    }
+  }
+
+  @Test
+  public void testRuntimeWithMatchByColumnNameCaseInsensitive() throws IOException {
+    File in = testFolder.newFile(SnowflakeUtils.randomString(8) + ".csv");
+    List<String> lines = createLines("c1:string,C0:string", "111,aaa", "222,bbb", "333,ccc");
+    Files.write(in.toPath(), lines);
+
+    String targetTableName = generateTemporaryTableName();
+    String targetTableFullName =
+        String.format(
+            "\"%s\".\"%s\".\"%s\"", TEST_SNOWFLAKE_DB, TEST_SNOWFLAKE_SCHEMA, targetTableName);
+    runQuery(
+        String.format("create table %s (\"c0\" STRING, \"c1\" STRING)", targetTableFullName),
+        foreachResult(rs_ -> {}));
+
+    final ConfigSource config =
+        CONFIG_MAPPER_FACTORY
+            .newConfigSource()
+            .set("type", "snowflake")
+            .set("user", TEST_SNOWFLAKE_USER)
+            .set("password", TEST_SNOWFLAKE_PASSWORD)
+            .set("host", TEST_SNOWFLAKE_HOST)
+            .set("database", TEST_SNOWFLAKE_DB)
+            .set("warehouse", TEST_SNOWFLAKE_WAREHOUSE)
+            .set("schema", TEST_SNOWFLAKE_SCHEMA)
+            .set("mode", "insert")
+            .set("match_by_column_name", "case_insensitive")
+            .set("table", targetTableName);
+    embulk.runOutput(config, in.toPath());
+
+    runQuery(
+        String.format("select count(*) from %s;", targetTableFullName),
+        foreachResult(
+            rs -> {
+              assertEquals(3, rs.getInt(1));
+            }));
+    List<String> results = new ArrayList();
+    runQuery(
+        "select \"c0\",\"c1\" from " + targetTableFullName + " order by 1",
+        foreachResult(
+            rs -> {
+              results.add(rs.getString(1) + "," + rs.getString(2));
+            }));
+    List<String> expected = Stream.of("aaa,111", "bbb,222", "ccc,333").collect(Collectors.toList());
+    for (int i = 0; i < results.size(); i++) {
+      assertEquals(expected.get(i), results.get(i));
+    }
+  }
+
+  @Test
+  public void testRuntimeWithMatchByColumnNameCaseInsensitiveSkipWhenNoMatchColumnName()
+      throws IOException {
+    File in = testFolder.newFile(SnowflakeUtils.randomString(8) + ".csv");
+    List<String> lines = createLines("only_csv:string,C0:string", "111,aaa", "222,bbb", "333,ccc");
+    Files.write(in.toPath(), lines);
+
+    String targetTableName = generateTemporaryTableName();
+    String targetTableFullName =
+        String.format(
+            "\"%s\".\"%s\".\"%s\"", TEST_SNOWFLAKE_DB, TEST_SNOWFLAKE_SCHEMA, targetTableName);
+    runQuery(
+        String.format(
+            "create table %s (\"c0\" STRING, \"only_table\" STRING)", targetTableFullName),
+        foreachResult(rs_ -> {}));
+
+    final ConfigSource config =
+        CONFIG_MAPPER_FACTORY
+            .newConfigSource()
+            .set("type", "snowflake")
+            .set("user", TEST_SNOWFLAKE_USER)
+            .set("password", TEST_SNOWFLAKE_PASSWORD)
+            .set("host", TEST_SNOWFLAKE_HOST)
+            .set("database", TEST_SNOWFLAKE_DB)
+            .set("warehouse", TEST_SNOWFLAKE_WAREHOUSE)
+            .set("schema", TEST_SNOWFLAKE_SCHEMA)
+            .set("mode", "insert")
+            .set("match_by_column_name", "case_insensitive")
+            .set("table", targetTableName);
+    embulk.runOutput(config, in.toPath());
+
+    runQuery(
+        String.format("select count(*) from %s;", targetTableFullName),
+        foreachResult(
+            rs -> {
+              assertEquals(3, rs.getInt(1));
+            }));
+    List<String> results = new ArrayList();
+    runQuery(
+        "select \"c0\",\"only_table\" from " + targetTableFullName + " order by 1",
+        foreachResult(
+            rs -> {
+              results.add(rs.getString(1) + "," + rs.getString(2));
+            }));
+    List<String> expected =
+        Stream.of("aaa,null", "bbb,null", "ccc,null").collect(Collectors.toList());
     for (int i = 0; i < results.size(); i++) {
       assertEquals(expected.get(i), results.get(i));
     }

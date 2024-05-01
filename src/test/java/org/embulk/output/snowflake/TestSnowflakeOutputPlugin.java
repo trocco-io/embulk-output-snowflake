@@ -750,7 +750,7 @@ public class TestSnowflakeOutputPlugin {
         String.format(
             "\"%s\".\"%s\".\"%s\"", TEST_SNOWFLAKE_DB, TEST_SNOWFLAKE_SCHEMA, targetTableName);
     runQuery(
-        String.format("create table %s (\"c0\" STRING, \"c1\" STRING)", targetTableFullName),
+        String.format("create table %s (\"C0\" STRING, \"c1\" STRING)", targetTableFullName),
         foreachResult(rs_ -> {}));
 
     final ConfigSource config =
@@ -776,23 +776,71 @@ public class TestSnowflakeOutputPlugin {
             }));
     List<String> results = new ArrayList();
     runQuery(
-        "select \"c0\",\"c1\" from " + targetTableFullName + " order by 1",
+        "select \"C0\",\"c1\" from " + targetTableFullName + " order by 1",
         foreachResult(
             rs -> {
               results.add(rs.getString(1) + "," + rs.getString(2));
             }));
-    List<String> expected =
-        Stream.of("null,111", "null,222", "null,333").collect(Collectors.toList());
+    List<String> expected = Stream.of("aaa,111", "bbb,222", "ccc,333").collect(Collectors.toList());
     for (int i = 0; i < results.size(); i++) {
       assertEquals(expected.get(i), results.get(i));
     }
   }
 
   @Test
-  public void testRuntimeWithMatchByColumnNameCaseSensitiveSkipWhenNoMatchColumnName()
+  public void testRuntimeWithMatchByColumnNameCaseSensitiveWhenOnlyPresentColumnInCSV()
       throws IOException {
     File in = testFolder.newFile(SnowflakeUtils.randomString(8) + ".csv");
     List<String> lines = createLines("only_csv:string,c0:string", "111,aaa", "222,bbb", "333,ccc");
+    Files.write(in.toPath(), lines);
+
+    String targetTableName = generateTemporaryTableName();
+    String targetTableFullName =
+        String.format(
+            "\"%s\".\"%s\".\"%s\"", TEST_SNOWFLAKE_DB, TEST_SNOWFLAKE_SCHEMA, targetTableName);
+    runQuery(
+        String.format("create table %s (\"c0\" STRING)", targetTableFullName),
+        foreachResult(rs_ -> {}));
+
+    final ConfigSource config =
+        CONFIG_MAPPER_FACTORY
+            .newConfigSource()
+            .set("type", "snowflake")
+            .set("user", TEST_SNOWFLAKE_USER)
+            .set("password", TEST_SNOWFLAKE_PASSWORD)
+            .set("host", TEST_SNOWFLAKE_HOST)
+            .set("database", TEST_SNOWFLAKE_DB)
+            .set("warehouse", TEST_SNOWFLAKE_WAREHOUSE)
+            .set("schema", TEST_SNOWFLAKE_SCHEMA)
+            .set("mode", "insert")
+            .set("match_by_column_name", "case_sensitive")
+            .set("table", targetTableName);
+    embulk.runOutput(config, in.toPath());
+
+    runQuery(
+        String.format("select count(*) from %s;", targetTableFullName),
+        foreachResult(
+            rs -> {
+              assertEquals(3, rs.getInt(1));
+            }));
+    List<String> results = new ArrayList();
+    runQuery(
+        "select \"c0\" from " + targetTableFullName + " order by 1",
+        foreachResult(
+            rs -> {
+              results.add(rs.getString(1));
+            }));
+    List<String> expected = Stream.of("aaa", "bbb", "ccc").collect(Collectors.toList());
+    for (int i = 0; i < results.size(); i++) {
+      assertEquals(expected.get(i), results.get(i));
+    }
+  }
+
+  @Test
+  public void testRuntimeWithMatchByColumnNameCaseSensitiveWhenOnlyPresentColumnInTable()
+      throws IOException {
+    File in = testFolder.newFile(SnowflakeUtils.randomString(8) + ".csv");
+    List<String> lines = createLines("c0:string", "aaa", "bbb", "ccc");
     Files.write(in.toPath(), lines);
 
     String targetTableName = generateTemporaryTableName();
@@ -827,7 +875,7 @@ public class TestSnowflakeOutputPlugin {
             }));
     List<String> results = new ArrayList();
     runQuery(
-        "select \"c0\",\"only_table\" from " + targetTableFullName + " order by 1",
+        "select \"c0\", \"only_table\" from " + targetTableFullName + " order by 1",
         foreachResult(
             rs -> {
               results.add(rs.getString(1) + "," + rs.getString(2));
@@ -888,10 +936,59 @@ public class TestSnowflakeOutputPlugin {
   }
 
   @Test
-  public void testRuntimeWithMatchByColumnNameCaseInsensitiveSkipWhenNoMatchColumnName()
+  public void testRuntimeWithMatchByColumnNameCaseInsensitiveWhenOnlyPresentColumnInCSV()
       throws IOException {
     File in = testFolder.newFile(SnowflakeUtils.randomString(8) + ".csv");
     List<String> lines = createLines("only_csv:string,C0:string", "111,aaa", "222,bbb", "333,ccc");
+    Files.write(in.toPath(), lines);
+
+    String targetTableName = generateTemporaryTableName();
+    String targetTableFullName =
+        String.format(
+            "\"%s\".\"%s\".\"%s\"", TEST_SNOWFLAKE_DB, TEST_SNOWFLAKE_SCHEMA, targetTableName);
+    runQuery(
+        String.format("create table %s (\"c0\" STRING)", targetTableFullName),
+        foreachResult(rs_ -> {}));
+
+    final ConfigSource config =
+        CONFIG_MAPPER_FACTORY
+            .newConfigSource()
+            .set("type", "snowflake")
+            .set("user", TEST_SNOWFLAKE_USER)
+            .set("password", TEST_SNOWFLAKE_PASSWORD)
+            .set("host", TEST_SNOWFLAKE_HOST)
+            .set("database", TEST_SNOWFLAKE_DB)
+            .set("warehouse", TEST_SNOWFLAKE_WAREHOUSE)
+            .set("schema", TEST_SNOWFLAKE_SCHEMA)
+            .set("mode", "insert")
+            .set("match_by_column_name", "case_insensitive")
+            .set("table", targetTableName);
+    embulk.runOutput(config, in.toPath());
+
+    runQuery(
+        String.format("select count(*) from %s;", targetTableFullName),
+        foreachResult(
+            rs -> {
+              assertEquals(3, rs.getInt(1));
+            }));
+    List<String> results = new ArrayList();
+    runQuery(
+        "select \"c0\" from " + targetTableFullName + " order by 1",
+        foreachResult(
+            rs -> {
+              results.add(rs.getString(1));
+            }));
+    List<String> expected = Stream.of("aaa", "bbb", "ccc").collect(Collectors.toList());
+    for (int i = 0; i < results.size(); i++) {
+      assertEquals(expected.get(i), results.get(i));
+    }
+  }
+
+  @Test
+  public void testRuntimeWithMatchByColumnNameCaseInsensitiveWhenOnlyPresentColumnInTable()
+      throws IOException {
+    File in = testFolder.newFile(SnowflakeUtils.randomString(8) + ".csv");
+    List<String> lines = createLines("C0:string", "aaa", "bbb", "ccc");
     Files.write(in.toPath(), lines);
 
     String targetTableName = generateTemporaryTableName();
@@ -926,7 +1023,7 @@ public class TestSnowflakeOutputPlugin {
             }));
     List<String> results = new ArrayList();
     runQuery(
-        "select \"c0\",\"only_table\" from " + targetTableFullName + " order by 1",
+        "select \"c0\", \"only_table\" from " + targetTableFullName + " order by 1",
         foreachResult(
             rs -> {
               results.add(rs.getString(1) + "," + rs.getString(2));

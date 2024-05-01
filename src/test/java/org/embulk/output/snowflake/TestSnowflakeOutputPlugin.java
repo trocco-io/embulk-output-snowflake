@@ -873,10 +873,10 @@ public class TestSnowflakeOutputPlugin {
             });
     assertTrue(
         exception.getCause().getMessage(),
-        exception.getCause().getMessage().contains("input schema column c1"));
+        exception.getCause().getMessage().matches(".*table column C1, C3 is not found.*"));
     assertTrue(
         exception.getCause().getMessage(),
-        exception.getCause().getMessage().contains("case-sensitive"));
+        exception.getCause().getMessage().matches(".*input schema column c1, c3 is not found.*"));
   }
 
   @Test
@@ -919,12 +919,12 @@ public class TestSnowflakeOutputPlugin {
             () -> {
               embulk.runOutput(config, in.toPath());
             });
-    assertTrue(
-        exception.getCause().getMessage(),
-        exception.getCause().getMessage().contains("input schema column c1"));
     assertFalse(
         exception.getCause().getMessage(),
-        exception.getCause().getMessage().contains("case-sensitive"));
+        exception.getCause().getMessage().matches(".*table column .* is not found.*"));
+    assertTrue(
+        exception.getCause().getMessage(),
+        exception.getCause().getMessage().matches(".*input schema column c1, c3 is not found.*"));
   }
 
   @Test
@@ -963,10 +963,10 @@ public class TestSnowflakeOutputPlugin {
             });
     assertTrue(
         exception.getCause().getMessage(),
-        exception.getCause().getMessage().contains("table column c1"));
+        exception.getCause().getMessage().matches(".*table column c1 is not found.*"));
     assertFalse(
         exception.getCause().getMessage(),
-        exception.getCause().getMessage().contains("case-sensitive"));
+        exception.getCause().getMessage().matches(".*input schema column .* is not found.*"));
   }
 
   @Test
@@ -1106,12 +1106,12 @@ public class TestSnowflakeOutputPlugin {
             () -> {
               embulk.runOutput(config, in.toPath());
             });
-    assertTrue(
-        exception.getCause().getMessage(),
-        exception.getCause().getMessage().contains("input schema column c1"));
     assertFalse(
         exception.getCause().getMessage(),
-        exception.getCause().getMessage().contains("case-sensitive"));
+        exception.getCause().getMessage().matches(".*table column .* is not found.*"));
+    assertTrue(
+        exception.getCause().getMessage(),
+        exception.getCause().getMessage().matches(".*input schema column c1, c3 is not found.*"));
   }
 
   @Test
@@ -1150,10 +1150,10 @@ public class TestSnowflakeOutputPlugin {
             });
     assertTrue(
         exception.getCause().getMessage(),
-        exception.getCause().getMessage().contains("table column c1"));
+        exception.getCause().getMessage().matches(".*table column c1 is not found.*"));
     assertFalse(
         exception.getCause().getMessage(),
-        exception.getCause().getMessage().contains("case-sensitive"));
+        exception.getCause().getMessage().matches(".*input schema column .* is not found.*"));
   }
 
   @Ignore(

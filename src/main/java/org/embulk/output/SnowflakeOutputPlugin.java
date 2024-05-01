@@ -253,15 +253,15 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
             ? Optional.empty()
             : newJdbcSchemaFromTableIfExists(con, task.getActualTable());
 
+    List<String> invalidTableColumnNames = new ArrayList<>();
+    List<String> invalidSchemaColumnNames = new ArrayList<>();
     if (initialTargetTableSchema.isPresent()) {
-      JdbcSchema skipColumnsFilteredTargetTableSchema =
-          JdbcSchema.filterSkipColumns(targetTableSchema);
-      for (JdbcColumn column : initialTargetTableSchema.get().getColumns()) {
-        if (skipColumnsFilteredTargetTableSchema.findColumn(column.getName()).isPresent()) {
+      for (JdbcColumn jdbcColumn : initialTargetTableSchema.get().getColumns()) {
+        if (schema.getColumns().stream()
+            .anyMatch((x) -> compare.apply(x.getName(), jdbcColumn.getName()))) {
           continue;
         }
-        throw new UnsupportedOperationException(
-            String.format("table column %s is not found in input schema.", column.getName()));
+        invalidTableColumnNames.add(jdbcColumn.getName());
       }
     }
 
@@ -270,21 +270,32 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
       JdbcColumn targetColumn = targetTableSchema.getColumn(i);
       Column schemaColumn = schema.getColumn(i);
       if (targetColumn.isSkipColumn()) {
-        throw new UnsupportedOperationException(
-            String.format(
-                "input schema column %s is not found in %s table.",
-                schemaColumn.getName(), task.getActualTable().getTableName()));
+        invalidSchemaColumnNames.add(schemaColumn.getName());
+        continue;
       }
       if (compare.apply(schemaColumn.getName(), targetColumn.getName())) {
         copyIntoTableColumnNames.add(targetColumn.getName());
         copyIntoCSVColumnNumbers.add(columnNumber);
       } else {
-        throw new UnsupportedOperationException(
-            String.format(
-                "input schema column %s is not found in %s table. (probably a case-sensitive problems)",
-                schemaColumn.getName(), task.getActualTable().getTableName()));
+        invalidSchemaColumnNames.add(schemaColumn.getName());
       }
       columnNumber += 1;
+    }
+    if (!invalidTableColumnNames.isEmpty() || !invalidSchemaColumnNames.isEmpty()) {
+      List<String> msgs = new ArrayList<>();
+      if (!invalidTableColumnNames.isEmpty()) {
+        msgs.add(
+            String.format(
+                "table column %s is not found in input schema.",
+                String.join(", ", invalidTableColumnNames)));
+      }
+      if (!invalidSchemaColumnNames.isEmpty()) {
+        msgs.add(
+            String.format(
+                "input schema column %s is not found in target table.",
+                String.join(", ", invalidSchemaColumnNames)));
+      }
+      throw new UnsupportedOperationException(String.join(" ", msgs));
     }
     pluginTask.setCopyIntoTableColumnNames(copyIntoTableColumnNames.toArray(new String[0]));
     pluginTask.setCopyIntoCSVColumnNumbers(

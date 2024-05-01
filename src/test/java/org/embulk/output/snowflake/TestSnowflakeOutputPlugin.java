@@ -1,8 +1,6 @@
 package org.embulk.output.snowflake;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 import java.io.File;
 import java.io.IOException;
@@ -25,6 +23,7 @@ import org.embulk.EmbulkEmbed;
 import org.embulk.EmbulkSystemProperties;
 import org.embulk.config.ConfigException;
 import org.embulk.config.ConfigSource;
+import org.embulk.exec.PartialExecutionException;
 import org.embulk.input.file.LocalFileInputPlugin;
 import org.embulk.output.SnowflakeOutputPlugin;
 import org.embulk.output.SnowflakeOutputPlugin.SnowflakePluginTask;
@@ -41,10 +40,7 @@ import org.embulk.util.config.TaskMapper;
 import org.embulk.util.config.modules.ZoneIdModule;
 import org.embulk.util.config.units.ColumnConfig;
 import org.embulk.util.config.units.SchemaConfig;
-import org.junit.After;
-import org.junit.Ignore;
-import org.junit.Rule;
-import org.junit.Test;
+import org.junit.*;
 import org.junit.rules.TemporaryFolder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -869,34 +865,18 @@ public class TestSnowflakeOutputPlugin {
             .set("mode", "insert")
             .set("match_by_column_name", "case_sensitive")
             .set("table", targetTableName);
-    embulk.runOutput(config, in.toPath());
-
-    runQuery(
-        String.format("select count(*) from %s;", targetTableFullName),
-        foreachResult(
-            rs -> {
-              assertEquals(3, rs.getInt(1));
-            }));
-    List<String> results = new ArrayList();
-    runQuery(
-        "select \"c0\", \"C1\", \"c2\", \"C3\" from " + targetTableFullName + " order by 1",
-        foreachResult(
-            rs -> {
-              results.add(
-                  rs.getString(1)
-                      + ","
-                      + rs.getString(2)
-                      + ","
-                      + rs.getString(3)
-                      + ","
-                      + rs.getString(4));
-            }));
-    List<String> expected =
-        Stream.of("1.0,null,10000.0,null", "2.0,null,20000.0,null", "3.0,null,30000.0,null")
-            .collect(Collectors.toList());
-    for (int i = 0; i < results.size(); i++) {
-      assertEquals(expected.get(i), results.get(i));
-    }
+    PartialExecutionException exception =
+        assertThrows(
+            PartialExecutionException.class,
+            () -> {
+              embulk.runOutput(config, in.toPath());
+            });
+    assertTrue(
+        exception.getCause().getMessage(),
+        exception.getCause().getMessage().contains("input schema column c1"));
+    assertTrue(
+        exception.getCause().getMessage(),
+        exception.getCause().getMessage().contains("case-sensitive"));
   }
 
   @Test
@@ -933,26 +913,18 @@ public class TestSnowflakeOutputPlugin {
             .set("mode", "insert")
             .set("match_by_column_name", "case_sensitive")
             .set("table", targetTableName);
-    embulk.runOutput(config, in.toPath());
-
-    runQuery(
-        String.format("select count(*) from %s;", targetTableFullName),
-        foreachResult(
-            rs -> {
-              assertEquals(3, rs.getInt(1));
-            }));
-    List<String> results = new ArrayList();
-    runQuery(
-        "select \"c0\", \"c2\" from " + targetTableFullName + " order by 1",
-        foreachResult(
-            rs -> {
-              results.add(rs.getString(1) + "," + rs.getString(2));
-            }));
-    List<String> expected =
-        Stream.of("1.0,10000.0", "2.0,20000.0", "3.0,30000.0").collect(Collectors.toList());
-    for (int i = 0; i < results.size(); i++) {
-      assertEquals(expected.get(i), results.get(i));
-    }
+    PartialExecutionException exception =
+        assertThrows(
+            PartialExecutionException.class,
+            () -> {
+              embulk.runOutput(config, in.toPath());
+            });
+    assertTrue(
+        exception.getCause().getMessage(),
+        exception.getCause().getMessage().contains("input schema column c1"));
+    assertFalse(
+        exception.getCause().getMessage(),
+        exception.getCause().getMessage().contains("case-sensitive"));
   }
 
   @Test
@@ -983,26 +955,18 @@ public class TestSnowflakeOutputPlugin {
             .set("mode", "insert")
             .set("match_by_column_name", "case_sensitive")
             .set("table", targetTableName);
-    embulk.runOutput(config, in.toPath());
-
-    runQuery(
-        String.format("select count(*) from %s;", targetTableFullName),
-        foreachResult(
-            rs -> {
-              assertEquals(3, rs.getInt(1));
-            }));
-    List<String> results = new ArrayList();
-    runQuery(
-        "select \"c0\", \"c1\" from " + targetTableFullName + " order by 1",
-        foreachResult(
-            rs -> {
-              results.add(rs.getString(1) + "," + rs.getString(2));
-            }));
-    List<String> expected =
-        Stream.of("1.0,null", "2.0,null", "3.0,null").collect(Collectors.toList());
-    for (int i = 0; i < results.size(); i++) {
-      assertEquals(expected.get(i), results.get(i));
-    }
+    PartialExecutionException exception =
+        assertThrows(
+            PartialExecutionException.class,
+            () -> {
+              embulk.runOutput(config, in.toPath());
+            });
+    assertTrue(
+        exception.getCause().getMessage(),
+        exception.getCause().getMessage().contains("table column c1"));
+    assertFalse(
+        exception.getCause().getMessage(),
+        exception.getCause().getMessage().contains("case-sensitive"));
   }
 
   @Test
@@ -1136,26 +1100,18 @@ public class TestSnowflakeOutputPlugin {
             .set("mode", "insert")
             .set("match_by_column_name", "case_insensitive")
             .set("table", targetTableName);
-    embulk.runOutput(config, in.toPath());
-
-    runQuery(
-        String.format("select count(*) from %s;", targetTableFullName),
-        foreachResult(
-            rs -> {
-              assertEquals(3, rs.getInt(1));
-            }));
-    List<String> results = new ArrayList();
-    runQuery(
-        "select \"C0\", \"c2\" from " + targetTableFullName + " order by 1",
-        foreachResult(
-            rs -> {
-              results.add(rs.getString(1) + "," + rs.getString(2));
-            }));
-    List<String> expected =
-        Stream.of("1.0,10000.0", "2.0,20000.0", "3.0,30000.0").collect(Collectors.toList());
-    for (int i = 0; i < results.size(); i++) {
-      assertEquals(expected.get(i), results.get(i));
-    }
+    PartialExecutionException exception =
+        assertThrows(
+            PartialExecutionException.class,
+            () -> {
+              embulk.runOutput(config, in.toPath());
+            });
+    assertTrue(
+        exception.getCause().getMessage(),
+        exception.getCause().getMessage().contains("input schema column c1"));
+    assertFalse(
+        exception.getCause().getMessage(),
+        exception.getCause().getMessage().contains("case-sensitive"));
   }
 
   @Test
@@ -1186,26 +1142,18 @@ public class TestSnowflakeOutputPlugin {
             .set("mode", "insert")
             .set("match_by_column_name", "case_insensitive")
             .set("table", targetTableName);
-    embulk.runOutput(config, in.toPath());
-
-    runQuery(
-        String.format("select count(*) from %s;", targetTableFullName),
-        foreachResult(
-            rs -> {
-              assertEquals(3, rs.getInt(1));
-            }));
-    List<String> results = new ArrayList();
-    runQuery(
-        "select \"C0\", \"c1\" from " + targetTableFullName + " order by 1",
-        foreachResult(
-            rs -> {
-              results.add(rs.getString(1) + "," + rs.getString(2));
-            }));
-    List<String> expected =
-        Stream.of("1.0,null", "2.0,null", "3.0,null").collect(Collectors.toList());
-    for (int i = 0; i < results.size(); i++) {
-      assertEquals(expected.get(i), results.get(i));
-    }
+    PartialExecutionException exception =
+        assertThrows(
+            PartialExecutionException.class,
+            () -> {
+              embulk.runOutput(config, in.toPath());
+            });
+    assertTrue(
+        exception.getCause().getMessage(),
+        exception.getCause().getMessage().contains("table column c1"));
+    assertFalse(
+        exception.getCause().getMessage(),
+        exception.getCause().getMessage().contains("case-sensitive"));
   }
 
   @Ignore(

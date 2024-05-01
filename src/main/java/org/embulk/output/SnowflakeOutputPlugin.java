@@ -247,16 +247,42 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
         matchByColumnName == SnowflakePluginTask.MatchByColumnName.CASE_SENSITIVE
             ? String::equals
             : String::equalsIgnoreCase;
+
+    Optional<JdbcSchema> initialTargetTableSchema =
+        pluginTask.getMode().ignoreTargetTableSchema()
+            ? Optional.empty()
+            : newJdbcSchemaFromTableIfExists(con, task.getActualTable());
+
+    if (initialTargetTableSchema.isPresent()) {
+      JdbcSchema skipColumnsFilteredTargetTableSchema =
+          JdbcSchema.filterSkipColumns(targetTableSchema);
+      for (JdbcColumn column : initialTargetTableSchema.get().getColumns()) {
+        if (skipColumnsFilteredTargetTableSchema.findColumn(column.getName()).isPresent()) {
+          continue;
+        }
+        throw new UnsupportedOperationException(
+            String.format("table column %s is not found in input schema.", column.getName()));
+      }
+    }
+
     int columnNumber = 1;
     for (int i = 0; i < targetTableSchema.getCount(); i++) {
       JdbcColumn targetColumn = targetTableSchema.getColumn(i);
-      if (targetColumn.isSkipColumn()) {
-        continue;
-      }
       Column schemaColumn = schema.getColumn(i);
+      if (targetColumn.isSkipColumn()) {
+        throw new UnsupportedOperationException(
+            String.format(
+                "input schema column %s is not found in %s table.",
+                schemaColumn.getName(), task.getActualTable().getTableName()));
+      }
       if (compare.apply(schemaColumn.getName(), targetColumn.getName())) {
         copyIntoTableColumnNames.add(targetColumn.getName());
         copyIntoCSVColumnNumbers.add(columnNumber);
+      } else {
+        throw new UnsupportedOperationException(
+            String.format(
+                "input schema column %s is not found in %s table. (probably a case-sensitive problems)",
+                schemaColumn.getName(), task.getActualTable().getTableName()));
       }
       columnNumber += 1;
     }

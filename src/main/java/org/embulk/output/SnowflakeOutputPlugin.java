@@ -139,6 +139,8 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
     props.setProperty("CLIENT_METADATA_REQUEST_USE_CONNECTION_CTX", "true");
     props.setProperty("MULTI_STATEMENT_COUNT", "0");
 
+    props.setProperty("JDBC_TREAT_DECIMAL_AS_INT", "false");
+
     props.putAll(t.getOptions());
 
     logConnectionProperties(url, props);

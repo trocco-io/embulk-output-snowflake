@@ -97,7 +97,7 @@ public class ColumnSetterFactory {
   }
 
   public ColumnSetter newCoalesceColumnSetter(JdbcColumn column, JdbcColumnOption option) {
-    logger.info("Coerce type {}", column.getSqlType());
+    logger.info("Coerce type {}, {}, {}", column.getSqlType(), column.getName(), column.getSimpleTypeName());
     switch (column.getSqlType()) {
         // setByte
       case Types.TINYINT:

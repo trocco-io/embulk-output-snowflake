@@ -133,6 +133,10 @@ public class TestSnowflakeOutputPlugin {
     }
   }
 
+  private void runQuery(String query) {
+    runQuery(query, foreachResult(rs_ -> {}));
+  }
+
   private ThrowableConsumer<ResultSet> foreachResult(ThrowableConsumer<ResultSet> f) {
     return rs -> {
       try {
@@ -143,6 +147,11 @@ public class TestSnowflakeOutputPlugin {
         throw new RuntimeException(e);
       }
     };
+  }
+
+  private String generateTableFullName(String targetTableName) {
+    return String.format(
+        "\"%s\".\"%s\".\"%s\"", TEST_SNOWFLAKE_DB, TEST_SNOWFLAKE_SCHEMA, targetTableName);
   }
 
   private String generateTemporaryTableName() {
@@ -179,6 +188,63 @@ public class TestSnowflakeOutputPlugin {
                   String.format("drop database if exists \"%s\"", databaseName),
                   foreachResult(rs_ -> {}));
             }));
+  }
+
+  private File createTestFile(String... data) throws IOException {
+    File in = testFolder.newFile(SnowflakeUtils.randomString(8) + ".csv");
+    List<String> lines = Stream.of(data).collect(Collectors.toList());
+    Files.write(in.toPath(), lines);
+    return in;
+  }
+
+  private ConfigSource createConfig(String targetTableName, String mode, String matchByColumnName) {
+    return CONFIG_MAPPER_FACTORY
+        .newConfigSource()
+        .set("type", "snowflake")
+        .set("user", TEST_SNOWFLAKE_USER)
+        .set("password", TEST_SNOWFLAKE_PASSWORD)
+        .set("host", TEST_SNOWFLAKE_HOST)
+        .set("database", TEST_SNOWFLAKE_DB)
+        .set("warehouse", TEST_SNOWFLAKE_WAREHOUSE)
+        .set("schema", TEST_SNOWFLAKE_SCHEMA)
+        .set("mode", mode)
+        .set("match_by_column_name", matchByColumnName)
+        .set("table", targetTableName);
+  }
+
+  private void assertSelectResults(String tableName, String query, Stream<String> expectedStream) {
+    List<String> expected = expectedStream.collect(Collectors.toList());
+    runQuery(
+        String.format("select count(*) from %s;", tableName),
+        foreachResult(rs -> assertEquals(expected.size(), rs.getInt(1))));
+
+    int columnCount = expected.get(0).split(",").length;
+    List<String> results = new ArrayList<>();
+    runQuery(
+        query,
+        foreachResult(
+            rs -> {
+              List<String> result = new ArrayList<>();
+              for (int i = 1; i <= columnCount; i++) {
+                result.add(rs.getString(i));
+              }
+              results.add(String.join(",", result));
+            }));
+    for (int i = 0; i < results.size(); i++) {
+      assertEquals(expected.get(i), results.get(i));
+    }
+  }
+
+  private void assertSelectResults(
+      String tableName, Stream<String> columns, Stream<String> expected) {
+    String columnString =
+        columns.map(x -> String.format("\"%s\"", x)).collect(Collectors.joining(","));
+    String query = String.format("select %s from %s order by 1", columnString, tableName);
+    assertSelectResults(tableName, query, expected);
+  }
+
+  private void assertSelectResults(String tableName, String columns, String... expected) {
+    assertSelectResults(tableName, Arrays.stream(columns.split(",")), Arrays.stream(expected));
   }
 
   @After
@@ -682,478 +748,331 @@ public class TestSnowflakeOutputPlugin {
     }
   }
 
-  @Test
-  public void testRuntimeWithMatchByColumnNameNone() throws IOException {
-    File in = testFolder.newFile(SnowflakeUtils.randomString(8) + ".csv");
-    List<String> lines =
-        Stream.of("c1:double,c0:double", "100,1", "200,2", "300,3").collect(Collectors.toList());
-    Files.write(in.toPath(), lines);
+  private void execRuntimeForMatchByColumnName(
+      String mode,
+      String matchByColumnName,
+      String csvColumns,
+      String tableColumns,
+      String expectedColumns)
+      throws IOException {
+    final String targetTableName = generateTemporaryTableName();
+    final String targetTableFullName = generateTableFullName(targetTableName);
+    final Stream<String> csvColumnStream = Arrays.stream(csvColumns.split(","));
 
-    String targetTableName = generateTemporaryTableName();
-    String targetTableFullName =
-        String.format(
-            "\"%s\".\"%s\".\"%s\"", TEST_SNOWFLAKE_DB, TEST_SNOWFLAKE_SCHEMA, targetTableName);
-    runQuery(
-        String.format("create table %s (\"c0\" DOUBLE, \"c1\" DOUBLE)", targetTableFullName),
-        foreachResult(rs_ -> {}));
+    final String header = csvColumnStream.map(x -> x + ":double").collect(Collectors.joining(","));
+    final File in = createTestFile(header, "100,1", "200,2", "300,3");
 
-    final ConfigSource config =
-        CONFIG_MAPPER_FACTORY
-            .newConfigSource()
-            .set("type", "snowflake")
-            .set("user", TEST_SNOWFLAKE_USER)
-            .set("password", TEST_SNOWFLAKE_PASSWORD)
-            .set("host", TEST_SNOWFLAKE_HOST)
-            .set("database", TEST_SNOWFLAKE_DB)
-            .set("warehouse", TEST_SNOWFLAKE_WAREHOUSE)
-            .set("schema", TEST_SNOWFLAKE_SCHEMA)
-            .set("mode", "insert")
-            .set("table", targetTableName);
+    if (tableColumns != null) {
+      Stream<String> tableColumnStream = Arrays.stream(tableColumns.split(","));
+      Stream<String> tableColumnStreamWithType =
+          tableColumnStream.map(x -> String.format("\"%s\" DOUBLE", x));
+      String queryColumns = tableColumnStreamWithType.collect(Collectors.joining(","));
+      runQuery(String.format("create table %s (%s)", targetTableFullName, queryColumns));
+    }
+
+    ConfigSource config = createConfig(targetTableName, mode, matchByColumnName);
+    if (mode.equals("merge")) {
+      String mergeColumns = tableColumns != null ? tableColumns : csvColumns;
+      config.set("merge_keys", Arrays.stream(mergeColumns.split(",")).collect(Collectors.toList()));
+    }
     embulk.runOutput(config, in.toPath());
 
-    runQuery(
-        String.format("select count(*) from %s;", targetTableFullName),
-        foreachResult(
-            rs -> {
-              assertEquals(3, rs.getInt(1));
-            }));
-    List<String> results = new ArrayList();
-    runQuery(
-        "select \"c0\",\"c1\" from " + targetTableFullName + " order by 1",
-        foreachResult(
-            rs -> {
-              results.add(rs.getString(1) + "," + rs.getString(2));
-            }));
-    List<String> expected =
-        Stream.of("100.0,1.0", "200.0,2.0", "300.0,3.0").collect(Collectors.toList());
-    for (int i = 0; i < results.size(); i++) {
-      assertEquals(expected.get(i), results.get(i));
-    }
+    Stream<String> expected = Arrays.stream(expectedColumns.split(","));
+    assertSelectResults(
+        targetTableFullName, expected, Stream.of("100.0,1.0", "200.0,2.0", "300.0,3.0"));
+  }
+
+  private PartialExecutionException assertEmbulkThrows(ConfigSource config, File in) {
+    return assertThrows(
+        PartialExecutionException.class, () -> embulk.runOutput(config, in.toPath()));
+  }
+
+  private void assertErrorMessageIncludeInputSchemaColumnNotFound(
+      PartialExecutionException exception, String... missingColumns) {
+    String msg = exception.getCause().getMessage();
+    String columns = String.join(", ", missingColumns);
+    String regex =
+        String.format(".*input schema column %s is not found in target table.*", columns);
+    assertTrue(msg, msg.matches(regex));
+  }
+
+  private void assertErrorMessageExcludeInputSchemaColumnNotFound(
+      PartialExecutionException exception) {
+    String msg = exception.getCause().getMessage();
+    String regex = ".*input schema column .* is not found in target table.*";
+    assertFalse(msg, msg.matches(regex));
+  }
+
+  private void assertErrorMessageIncludeTargetTableColumnNotFound(
+      PartialExecutionException exception, String... missingColumns) {
+    String msg = exception.getCause().getMessage();
+    String columns = String.join(", ", missingColumns);
+    String regex = String.format(".*table column %s is not found in input schema.*", columns);
+    assertTrue(msg, msg.matches(regex));
+  }
+
+  private void assertErrorMessageExcludeTargetTableColumnNotFound(
+      PartialExecutionException exception) {
+    String msg = exception.getCause().getMessage();
+    String regex = ".*table column .* is not found in input schema.*";
+    assertFalse(msg, msg.matches(regex));
   }
 
   @Test
-  public void testRuntimeWithMatchByColumnNameCaseSensitive() throws IOException {
-    File in = testFolder.newFile(SnowflakeUtils.randomString(8) + ".csv");
-    List<String> lines =
-        Stream.of("c1:double,C0:double", "100,1", "200,2", "300,3").collect(Collectors.toList());
-    Files.write(in.toPath(), lines);
+  public void testRuntimeWithMatchByColumNameInvalid() {
+    assertThrows(
+        PartialExecutionException.class,
+        () -> execRuntimeForMatchByColumnName("insert", "invalid", "c0", "c0", "c0"));
+  }
 
-    String targetTableName = generateTemporaryTableName();
-    String targetTableFullName =
-        String.format(
-            "\"%s\".\"%s\".\"%s\"", TEST_SNOWFLAKE_DB, TEST_SNOWFLAKE_SCHEMA, targetTableName);
-    runQuery(
-        String.format("create table %s (\"C0\" DOUBLE, \"c1\" DOUBLE)", targetTableFullName),
-        foreachResult(rs_ -> {}));
-
-    final ConfigSource config =
-        CONFIG_MAPPER_FACTORY
-            .newConfigSource()
-            .set("type", "snowflake")
-            .set("user", TEST_SNOWFLAKE_USER)
-            .set("password", TEST_SNOWFLAKE_PASSWORD)
-            .set("host", TEST_SNOWFLAKE_HOST)
-            .set("database", TEST_SNOWFLAKE_DB)
-            .set("warehouse", TEST_SNOWFLAKE_WAREHOUSE)
-            .set("schema", TEST_SNOWFLAKE_SCHEMA)
-            .set("mode", "insert")
-            .set("match_by_column_name", "case_sensitive")
-            .set("table", targetTableName);
-    embulk.runOutput(config, in.toPath());
-
-    runQuery(
-        String.format("select count(*) from %s;", targetTableFullName),
-        foreachResult(
-            rs -> {
-              assertEquals(3, rs.getInt(1));
-            }));
-    List<String> results = new ArrayList();
-    runQuery(
-        "select \"C0\",\"c1\" from " + targetTableFullName + " order by 1",
-        foreachResult(
-            rs -> {
-              results.add(rs.getString(1) + "," + rs.getString(2));
-            }));
-    List<String> expected =
-        Stream.of("1.0,100.0", "2.0,200.0", "3.0,300.0").collect(Collectors.toList());
-    for (int i = 0; i < results.size(); i++) {
-      assertEquals(expected.get(i), results.get(i));
-    }
+  // MatchByColumnName = None
+  @Test
+  public void testRuntimeWithMatchByColumnNameNoneInsert() throws IOException {
+    execRuntimeForMatchByColumnName("insert", "none", "c0,c1", "C1,c0", "C1,c0");
   }
 
   @Test
-  public void testRuntimeWithMatchByColumnNameCaseSensitiveInNoTable() throws IOException {
-    File in = testFolder.newFile(SnowflakeUtils.randomString(8) + ".csv");
-    List<String> lines =
-        Stream.of("c1:double,C0:double", "100,1", "200,2", "300,3").collect(Collectors.toList());
-    Files.write(in.toPath(), lines);
+  public void testRuntimeWithMatchByColumnNameNoneInsertDirect() throws IOException {
+    execRuntimeForMatchByColumnName("insert_direct", "none", "c0,c1", "C1,c0", "C1,c0");
+  }
 
-    String targetTableName = generateTemporaryTableName();
-    String targetTableFullName =
-        String.format(
-            "\"%s\".\"%s\".\"%s\"", TEST_SNOWFLAKE_DB, TEST_SNOWFLAKE_SCHEMA, targetTableName);
+  @Test
+  public void testRuntimeWithMatchByColumnNameNoneTruncateInsert() throws IOException {
+    execRuntimeForMatchByColumnName("truncate_insert", "none", "c0,c1", "C1,c0", "C1,c0");
+  }
 
-    final ConfigSource config =
-        CONFIG_MAPPER_FACTORY
-            .newConfigSource()
-            .set("type", "snowflake")
-            .set("user", TEST_SNOWFLAKE_USER)
-            .set("password", TEST_SNOWFLAKE_PASSWORD)
-            .set("host", TEST_SNOWFLAKE_HOST)
-            .set("database", TEST_SNOWFLAKE_DB)
-            .set("warehouse", TEST_SNOWFLAKE_WAREHOUSE)
-            .set("schema", TEST_SNOWFLAKE_SCHEMA)
-            .set("mode", "insert")
-            .set("match_by_column_name", "case_sensitive")
-            .set("table", targetTableName);
+  @Test
+  public void testRuntimeWithMatchByColumnNameNoneReplace() throws IOException {
+    execRuntimeForMatchByColumnName("replace", "none", "c0,c1", "C1,c0", "c0,c1");
+  }
+
+  @Test
+  public void testRuntimeWithMatchByColumnNameNoneMerge() throws IOException {
+    execRuntimeForMatchByColumnName("merge", "none", "c0,c1", "C1,c0", "C1,c0");
+  }
+
+  @Test
+  public void testRuntimeWithMatchByColumnNameCaseNoneWhenOnlyPresentColumnInCSV() throws IOException {
+    final String targetTableName = generateTemporaryTableName();
+    final String targetTableFullName = generateTableFullName(targetTableName);
+
+    File in = createTestFile("c1:double,c2:double,c3:double,c0:double", "100,1,,10000");
+    runQuery(String.format("create table %s (\"c0\" DOUBLE, \"c2\" DOUBLE)", targetTableFullName));
+
+    ConfigSource config = createConfig(targetTableName, "insert", "none");
     embulk.runOutput(config, in.toPath());
+    assertSelectResults(targetTableFullName, "c0,c2", "1.0,10000.0");
+  }
 
-    runQuery(
-        String.format("select count(*) from %s;", targetTableFullName),
-        foreachResult(
-            rs -> {
-              assertEquals(3, rs.getInt(1));
-            }));
-    List<String> results = new ArrayList();
-    runQuery(
-        "select \"C0\",\"c1\" from " + targetTableFullName + " order by 1",
-        foreachResult(
-            rs -> {
-              results.add(rs.getString(1) + "," + rs.getString(2));
-            }));
-    List<String> expected =
-        Stream.of("1.0,100.0", "2.0,200.0", "3.0,300.0").collect(Collectors.toList());
-    for (int i = 0; i < results.size(); i++) {
-      assertEquals(expected.get(i), results.get(i));
-    }
+  @Test
+  public void testRuntimeWithMatchByColumnNameNoneWhenOnlyPresentColumnInTable()
+          throws IOException {
+    final String targetTableName = generateTemporaryTableName();
+    final String targetTableFullName = generateTableFullName(targetTableName);
+
+    File in = createTestFile("c0:double", "100");
+    runQuery(String.format("create table %s (\"c0\" DOUBLE, \"c1\" DOUBLE)", targetTableFullName));
+
+    ConfigSource config = createConfig(targetTableName, "insert", "none");
+    PartialExecutionException exception = assertEmbulkThrows(config, in);
+    assertTrue(exception.getCause().getCause().getCause() instanceof net.snowflake.client.jdbc.SnowflakeSQLException);
+  }
+
+  // MatchByColumnName = CaseSensitive
+
+  // table present
+  @Test
+  public void testRuntimeWithMatchByColumnNameSensitiveInsert() throws IOException {
+    execRuntimeForMatchByColumnName("insert", "case_sensitive", "c0,c1", "c1,c0", "c0,c1");
+  }
+
+  @Test
+  public void testRuntimeWithMatchByColumnNameSensitiveInsertDirect() throws IOException {
+    execRuntimeForMatchByColumnName("insert_direct", "case_sensitive", "c0,c1", "c1,c0", "c0,c1");
+  }
+
+  @Test
+  public void testRuntimeWithMatchByColumnNameSensitiveTruncateInsert() throws IOException {
+    execRuntimeForMatchByColumnName("truncate_insert", "case_sensitive", "c0,c1", "c1,c0", "c0,c1");
+  }
+
+  @Test
+  public void testRuntimeWithMatchByColumnNameSensitiveReplace() throws IOException {
+    execRuntimeForMatchByColumnName("replace", "case_sensitive", "c0,c1", "c1,c0", "c0,c1");
+  }
+
+  @Test
+  public void testRuntimeWithMatchByColumnNameSensitiveMerge() throws IOException {
+    execRuntimeForMatchByColumnName("merge", "case_sensitive", "c0,c1", "c1,c0", "c0,c1");
+  }
+
+  // table absent
+
+  @Test
+  public void testRuntimeWithMatchByColumnNameSensitiveInsertInNoTable() throws IOException {
+    execRuntimeForMatchByColumnName("insert", "case_sensitive", "c0,c1", null, "c0,c1");
+  }
+
+  @Test
+  public void testRuntimeWithMatchByColumnNameSensitiveInsertDirectInNoTable() throws IOException {
+    execRuntimeForMatchByColumnName("insert_direct", "case_sensitive", "c0,c1", null, "c0,c1");
+  }
+
+  @Test
+  public void testRuntimeWithMatchByColumnNameSensitiveTruncateInsertInNoTable()
+      throws IOException {
+    execRuntimeForMatchByColumnName("truncate_insert", "case_sensitive", "c0,c1", null, "c0,c1");
+  }
+
+  @Test
+  public void testRuntimeWithMatchByColumnNameSensitiveReplaceInNoTable() throws IOException {
+    execRuntimeForMatchByColumnName("replace", "case_sensitive", "c0,c1", null, "c0,c1");
+  }
+
+  @Test
+  public void testRuntimeWithMatchByColumnNameSensitiveMergeInNoTable() throws IOException {
+    execRuntimeForMatchByColumnName("merge", "case_sensitive", "c0,c1", null, "c0,c1");
   }
 
   @Test
   public void
-      testRuntimeWithMatchByColumnNameCaseSensitiveWhenOnlyPresentColumnInCSVByNoMatchCaseSensitive()
+      testRuntimeWithMatchByColumnNameCaseSensitiveWhenOnlyPresentColumnInCSVByCaseSensitive()
           throws IOException {
-    File in = testFolder.newFile(SnowflakeUtils.randomString(8) + ".csv");
-    List<String> lines =
-        Stream.of(
-                "c1:double,c0:double,c3:double,c2:double",
-                "100,1,,10000",
-                "200,2,,20000",
-                "300,3,,30000")
-            .collect(Collectors.toList());
-    Files.write(in.toPath(), lines);
+    final String targetTableName = generateTemporaryTableName();
+    final String targetTableFullName = generateTableFullName(targetTableName);
 
-    String targetTableName = generateTemporaryTableName();
-    String targetTableFullName =
-        String.format(
-            "\"%s\".\"%s\".\"%s\"", TEST_SNOWFLAKE_DB, TEST_SNOWFLAKE_SCHEMA, targetTableName);
+    File in = createTestFile("c1:double,c0:double,c3:double,c2:double", "100,1,,10000");
     runQuery(
         String.format(
             "create table %s (\"c0\" DOUBLE, \"C1\" DOUBLE, \"c2\" DOUBLE, \"C3\" DOUBLE)",
-            targetTableFullName),
-        foreachResult(rs_ -> {}));
+            targetTableFullName));
 
-    final ConfigSource config =
-        CONFIG_MAPPER_FACTORY
-            .newConfigSource()
-            .set("type", "snowflake")
-            .set("user", TEST_SNOWFLAKE_USER)
-            .set("password", TEST_SNOWFLAKE_PASSWORD)
-            .set("host", TEST_SNOWFLAKE_HOST)
-            .set("database", TEST_SNOWFLAKE_DB)
-            .set("warehouse", TEST_SNOWFLAKE_WAREHOUSE)
-            .set("schema", TEST_SNOWFLAKE_SCHEMA)
-            .set("mode", "insert")
-            .set("match_by_column_name", "case_sensitive")
-            .set("table", targetTableName);
-    PartialExecutionException exception =
-        assertThrows(
-            PartialExecutionException.class,
-            () -> {
-              embulk.runOutput(config, in.toPath());
-            });
-    assertTrue(
-        exception.getCause().getMessage(),
-        exception.getCause().getMessage().matches(".*table column C1, C3 is not found.*"));
-    assertTrue(
-        exception.getCause().getMessage(),
-        exception.getCause().getMessage().matches(".*input schema column c1, c3 is not found.*"));
+    ConfigSource config = createConfig(targetTableName, "insert", "case_sensitive");
+    PartialExecutionException exception = assertEmbulkThrows(config, in);
+    assertErrorMessageIncludeInputSchemaColumnNotFound(exception, "c1", "c3");
+    assertErrorMessageIncludeTargetTableColumnNotFound(exception, "C1", "C3");
+  }
+
+  // Error
+  @Test
+  public void
+      testRuntimeWithMatchByColumnNameCaseSensitiveWhenOnlyPresentColumnInCSVBySkip()
+          throws IOException {
+    final String targetTableName = generateTemporaryTableName();
+    final String targetTableFullName = generateTableFullName(targetTableName);
+
+    File in = createTestFile("c1:double,c0:double,c3:double,c2:double", "100,1,,10000");
+    runQuery(String.format("create table %s (\"c0\" DOUBLE, \"c2\" DOUBLE)", targetTableFullName));
+
+    ConfigSource config = createConfig(targetTableName, "insert", "case_sensitive");
+    PartialExecutionException exception = assertEmbulkThrows(config, in);
+    assertErrorMessageIncludeInputSchemaColumnNotFound(exception, "c1", "c3");
+    assertErrorMessageExcludeTargetTableColumnNotFound(exception);
   }
 
   @Test
-  public void testRuntimeWithMatchByColumnNameCaseSensitiveWhenOnlyPresentColumnInCSVBySkip()
+  public void testRuntimeWithMatchByColumnNameCaseSensitiveWhenOnlyPresentColumnInTable() throws IOException {
+    final String targetTableName = generateTemporaryTableName();
+    final String targetTableFullName = generateTableFullName(targetTableName);
+
+    File in = createTestFile("c0:double", "100");
+    runQuery(String.format("create table %s (\"c0\" DOUBLE, \"c1\" DOUBLE)", targetTableFullName));
+
+    ConfigSource config = createConfig(targetTableName, "insert", "case_sensitive");
+    PartialExecutionException exception = assertEmbulkThrows(config, in);
+    assertErrorMessageExcludeInputSchemaColumnNotFound(exception);
+    assertErrorMessageIncludeTargetTableColumnNotFound(exception, "c1");
+  }
+
+  // MatchByColumnName = CaseInsensitive
+
+  // table present
+  @Test
+  public void testRuntimeWithMatchByColumnNameInsensitiveInsert() throws IOException {
+    execRuntimeForMatchByColumnName("insert", "case_insensitive", "c0,c1", "C1,c0", "c0,C1");
+  }
+
+  @Test
+  public void testRuntimeWithMatchByColumnNameInsensitiveInsertDirect() throws IOException {
+    execRuntimeForMatchByColumnName("insert_direct", "case_insensitive", "c0,c1", "C1,c0", "c0,C1");
+  }
+
+  @Test
+  public void testRuntimeWithMatchByColumnNameInsensitiveTruncateInsert() throws IOException {
+    execRuntimeForMatchByColumnName(
+        "truncate_insert", "case_insensitive", "c0,c1", "C1,c0", "c0,C1");
+  }
+
+  @Test
+  public void testRuntimeWithMatchByColumnNameInsensitiveReplace() throws IOException {
+    execRuntimeForMatchByColumnName("replace", "case_insensitive", "c0,c1", "C1,c0", "c0,c1");
+  }
+
+  @Test
+  public void testRuntimeWithMatchByColumnNameInsensitiveMerge() throws IOException {
+    execRuntimeForMatchByColumnName("merge", "case_insensitive", "c0,c1", "C1,c0", "c0,C1");
+  }
+
+  // table absent
+  @Test
+  public void testRuntimeWithMatchByColumnNameInsensitiveInsertInNoTable() throws IOException {
+    execRuntimeForMatchByColumnName("insert", "case_insensitive", "c0,c1", null, "c0,c1");
+  }
+
+  @Test
+  public void testRuntimeWithMatchByColumnNameInsensitiveInsertDirectInNoTable()
       throws IOException {
-    File in = testFolder.newFile(SnowflakeUtils.randomString(8) + ".csv");
-    List<String> lines =
-        Stream.of(
-                "c1:double,c0:double,c3:double,c2:double",
-                "100,1,,10000",
-                "200,2,,20000",
-                "300,3,,30000")
-            .collect(Collectors.toList());
-    Files.write(in.toPath(), lines);
-
-    String targetTableName = generateTemporaryTableName();
-    String targetTableFullName =
-        String.format(
-            "\"%s\".\"%s\".\"%s\"", TEST_SNOWFLAKE_DB, TEST_SNOWFLAKE_SCHEMA, targetTableName);
-    runQuery(
-        String.format("create table %s (\"c0\" DOUBLE, \"c2\" DOUBLE)", targetTableFullName),
-        foreachResult(rs_ -> {}));
-
-    final ConfigSource config =
-        CONFIG_MAPPER_FACTORY
-            .newConfigSource()
-            .set("type", "snowflake")
-            .set("user", TEST_SNOWFLAKE_USER)
-            .set("password", TEST_SNOWFLAKE_PASSWORD)
-            .set("host", TEST_SNOWFLAKE_HOST)
-            .set("database", TEST_SNOWFLAKE_DB)
-            .set("warehouse", TEST_SNOWFLAKE_WAREHOUSE)
-            .set("schema", TEST_SNOWFLAKE_SCHEMA)
-            .set("mode", "insert")
-            .set("match_by_column_name", "case_sensitive")
-            .set("table", targetTableName);
-    PartialExecutionException exception =
-        assertThrows(
-            PartialExecutionException.class,
-            () -> {
-              embulk.runOutput(config, in.toPath());
-            });
-    assertFalse(
-        exception.getCause().getMessage(),
-        exception.getCause().getMessage().matches(".*table column .* is not found.*"));
-    assertTrue(
-        exception.getCause().getMessage(),
-        exception.getCause().getMessage().matches(".*input schema column c1, c3 is not found.*"));
+    execRuntimeForMatchByColumnName("insert_direct", "case_insensitive", "c0,c1", null, "c0,c1");
   }
 
   @Test
-  public void testRuntimeWithMatchByColumnNameCaseSensitiveWhenOnlyPresentColumnInTable()
+  public void testRuntimeWithMatchByColumnNameInsensitiveTruncateInsertInNoTable()
       throws IOException {
-    File in = testFolder.newFile(SnowflakeUtils.randomString(8) + ".csv");
-    List<String> lines = Stream.of("c0:double", "1", "2", "3").collect(Collectors.toList());
-    Files.write(in.toPath(), lines);
-
-    String targetTableName = generateTemporaryTableName();
-    String targetTableFullName =
-        String.format(
-            "\"%s\".\"%s\".\"%s\"", TEST_SNOWFLAKE_DB, TEST_SNOWFLAKE_SCHEMA, targetTableName);
-    runQuery(
-        String.format("create table %s (\"c0\" DOUBLE, \"c1\" DOUBLE)", targetTableFullName),
-        foreachResult(rs_ -> {}));
-
-    final ConfigSource config =
-        CONFIG_MAPPER_FACTORY
-            .newConfigSource()
-            .set("type", "snowflake")
-            .set("user", TEST_SNOWFLAKE_USER)
-            .set("password", TEST_SNOWFLAKE_PASSWORD)
-            .set("host", TEST_SNOWFLAKE_HOST)
-            .set("database", TEST_SNOWFLAKE_DB)
-            .set("warehouse", TEST_SNOWFLAKE_WAREHOUSE)
-            .set("schema", TEST_SNOWFLAKE_SCHEMA)
-            .set("mode", "insert")
-            .set("match_by_column_name", "case_sensitive")
-            .set("table", targetTableName);
-    PartialExecutionException exception =
-        assertThrows(
-            PartialExecutionException.class,
-            () -> {
-              embulk.runOutput(config, in.toPath());
-            });
-    assertTrue(
-        exception.getCause().getMessage(),
-        exception.getCause().getMessage().matches(".*table column c1 is not found.*"));
-    assertFalse(
-        exception.getCause().getMessage(),
-        exception.getCause().getMessage().matches(".*input schema column .* is not found.*"));
+    execRuntimeForMatchByColumnName("truncate_insert", "case_insensitive", "c0,c1", null, "c0,c1");
   }
 
   @Test
-  public void testRuntimeWithMatchByColumnNameCaseInsensitive() throws IOException {
-    File in = testFolder.newFile(SnowflakeUtils.randomString(8) + ".csv");
-    List<String> lines =
-        Stream.of("c1:double,c0:double", "100,1", "200,2", "300,3").collect(Collectors.toList());
-    Files.write(in.toPath(), lines);
-
-    String targetTableName = generateTemporaryTableName();
-    String targetTableFullName =
-        String.format(
-            "\"%s\".\"%s\".\"%s\"", TEST_SNOWFLAKE_DB, TEST_SNOWFLAKE_SCHEMA, targetTableName);
-    runQuery(
-        String.format("create table %s (\"C0\" DOUBLE, \"c1\" DOUBLE)", targetTableFullName),
-        foreachResult(rs_ -> {}));
-
-    final ConfigSource config =
-        CONFIG_MAPPER_FACTORY
-            .newConfigSource()
-            .set("type", "snowflake")
-            .set("user", TEST_SNOWFLAKE_USER)
-            .set("password", TEST_SNOWFLAKE_PASSWORD)
-            .set("host", TEST_SNOWFLAKE_HOST)
-            .set("database", TEST_SNOWFLAKE_DB)
-            .set("warehouse", TEST_SNOWFLAKE_WAREHOUSE)
-            .set("schema", TEST_SNOWFLAKE_SCHEMA)
-            .set("mode", "insert")
-            .set("match_by_column_name", "case_insensitive")
-            .set("table", targetTableName);
-    embulk.runOutput(config, in.toPath());
-
-    runQuery(
-        String.format("select count(*) from %s;", targetTableFullName),
-        foreachResult(
-            rs -> {
-              assertEquals(3, rs.getInt(1));
-            }));
-    List<String> results = new ArrayList();
-    runQuery(
-        "select \"C0\",\"c1\" from " + targetTableFullName + " order by 1",
-        foreachResult(
-            rs -> {
-              results.add(rs.getString(1) + "," + rs.getString(2));
-            }));
-    List<String> expected =
-        Stream.of("1.0,100.0", "2.0,200.0", "3.0,300.0").collect(Collectors.toList());
-    for (int i = 0; i < results.size(); i++) {
-      assertEquals(expected.get(i), results.get(i));
-    }
+  public void testRuntimeWithMatchByColumnNameInsensitiveReplaceInNoTable() throws IOException {
+    execRuntimeForMatchByColumnName("replace", "case_insensitive", "c0,c1", null, "c0,c1");
   }
 
   @Test
-  public void testRuntimeWithMatchByColumnNameCaseInsensitiveInNoTable() throws IOException {
-    File in = testFolder.newFile(SnowflakeUtils.randomString(8) + ".csv");
-    List<String> lines =
-        Stream.of("c1:double,C0:double", "100,1", "200,2", "300,3").collect(Collectors.toList());
-    Files.write(in.toPath(), lines);
+  public void testRuntimeWithMatchByColumnNameInsensitiveMergeInNoTable() throws IOException {
+    execRuntimeForMatchByColumnName("merge", "case_insensitive", "c0,c1", null, "c0,c1");
+  }
 
-    String targetTableName = generateTemporaryTableName();
-    String targetTableFullName =
-        String.format(
-            "\"%s\".\"%s\".\"%s\"", TEST_SNOWFLAKE_DB, TEST_SNOWFLAKE_SCHEMA, targetTableName);
+  // Error
+  @Test
+  public void testRuntimeWithMatchByColumnNameCaseInsensitiveWhenOnlyPresentColumnInCSVBySkip() throws IOException {
+    final String targetTableName = generateTemporaryTableName();
+    final String targetTableFullName = generateTableFullName(targetTableName);
 
-    final ConfigSource config =
-        CONFIG_MAPPER_FACTORY
-            .newConfigSource()
-            .set("type", "snowflake")
-            .set("user", TEST_SNOWFLAKE_USER)
-            .set("password", TEST_SNOWFLAKE_PASSWORD)
-            .set("host", TEST_SNOWFLAKE_HOST)
-            .set("database", TEST_SNOWFLAKE_DB)
-            .set("warehouse", TEST_SNOWFLAKE_WAREHOUSE)
-            .set("schema", TEST_SNOWFLAKE_SCHEMA)
-            .set("mode", "insert")
-            .set("match_by_column_name", "case_insensitive")
-            .set("table", targetTableName);
-    embulk.runOutput(config, in.toPath());
+    File in =
+        createTestFile(
+            "c1:double,c0:double,c3:double,c2:double",
+            "100,1,,10000",
+            "200,2,,20000",
+            "300,3,,30000");
+    runQuery(String.format("create table %s (\"C0\" DOUBLE, \"c2\" DOUBLE)", targetTableFullName));
 
-    runQuery(
-        String.format("select count(*) from %s;", targetTableFullName),
-        foreachResult(
-            rs -> {
-              assertEquals(3, rs.getInt(1));
-            }));
-    List<String> results = new ArrayList();
-    runQuery(
-        "select \"C0\",\"c1\" from " + targetTableFullName + " order by 1",
-        foreachResult(
-            rs -> {
-              results.add(rs.getString(1) + "," + rs.getString(2));
-            }));
-    List<String> expected =
-        Stream.of("1.0,100.0", "2.0,200.0", "3.0,300.0").collect(Collectors.toList());
-    for (int i = 0; i < results.size(); i++) {
-      assertEquals(expected.get(i), results.get(i));
-    }
+    ConfigSource config = createConfig(targetTableName, "insert", "case_insensitive");
+    PartialExecutionException exception = assertEmbulkThrows(config, in);
+    assertErrorMessageIncludeInputSchemaColumnNotFound(exception, "c1", "c3");
+    assertErrorMessageExcludeTargetTableColumnNotFound(exception);
   }
 
   @Test
-  public void testRuntimeWithMatchByColumnNameCaseInsensitiveWhenOnlyPresentColumnInCSVBySkip()
-      throws IOException {
-    File in = testFolder.newFile(SnowflakeUtils.randomString(8) + ".csv");
-    List<String> lines =
-        Stream.of(
-                "c1:double,c0:double,c3:double,c2:double",
-                "100,1,,10000",
-                "200,2,,20000",
-                "300,3,,30000")
-            .collect(Collectors.toList());
-    Files.write(in.toPath(), lines);
+  public void testRuntimeWithMatchByColumnNameCaseInsensitiveWhenOnlyPresentColumnInTable() throws IOException {
+    final String targetTableName = generateTemporaryTableName();
+    final String targetTableFullName = generateTableFullName(targetTableName);
 
-    String targetTableName = generateTemporaryTableName();
-    String targetTableFullName =
-        String.format(
-            "\"%s\".\"%s\".\"%s\"", TEST_SNOWFLAKE_DB, TEST_SNOWFLAKE_SCHEMA, targetTableName);
-    runQuery(
-        String.format("create table %s (\"C0\" DOUBLE, \"c2\" DOUBLE)", targetTableFullName),
-        foreachResult(rs_ -> {}));
+    File in = createTestFile("c0:double", "100");
+    runQuery(String.format("create table %s (\"C0\" DOUBLE, \"c1\" DOUBLE)", targetTableFullName));
 
-    final ConfigSource config =
-        CONFIG_MAPPER_FACTORY
-            .newConfigSource()
-            .set("type", "snowflake")
-            .set("user", TEST_SNOWFLAKE_USER)
-            .set("password", TEST_SNOWFLAKE_PASSWORD)
-            .set("host", TEST_SNOWFLAKE_HOST)
-            .set("database", TEST_SNOWFLAKE_DB)
-            .set("warehouse", TEST_SNOWFLAKE_WAREHOUSE)
-            .set("schema", TEST_SNOWFLAKE_SCHEMA)
-            .set("mode", "insert")
-            .set("match_by_column_name", "case_insensitive")
-            .set("table", targetTableName);
-    PartialExecutionException exception =
-        assertThrows(
-            PartialExecutionException.class,
-            () -> {
-              embulk.runOutput(config, in.toPath());
-            });
-    assertFalse(
-        exception.getCause().getMessage(),
-        exception.getCause().getMessage().matches(".*table column .* is not found.*"));
-    assertTrue(
-        exception.getCause().getMessage(),
-        exception.getCause().getMessage().matches(".*input schema column c1, c3 is not found.*"));
-  }
-
-  @Test
-  public void testRuntimeWithMatchByColumnNameCaseInsensitiveWhenOnlyPresentColumnInTable()
-      throws IOException {
-    File in = testFolder.newFile(SnowflakeUtils.randomString(8) + ".csv");
-    List<String> lines = Stream.of("c0:double", "1", "2", "3").collect(Collectors.toList());
-    Files.write(in.toPath(), lines);
-
-    String targetTableName = generateTemporaryTableName();
-    String targetTableFullName =
-        String.format(
-            "\"%s\".\"%s\".\"%s\"", TEST_SNOWFLAKE_DB, TEST_SNOWFLAKE_SCHEMA, targetTableName);
-    runQuery(
-        String.format("create table %s (\"C0\" DOUBLE, \"c1\" DOUBLE)", targetTableFullName),
-        foreachResult(rs_ -> {}));
-
-    final ConfigSource config =
-        CONFIG_MAPPER_FACTORY
-            .newConfigSource()
-            .set("type", "snowflake")
-            .set("user", TEST_SNOWFLAKE_USER)
-            .set("password", TEST_SNOWFLAKE_PASSWORD)
-            .set("host", TEST_SNOWFLAKE_HOST)
-            .set("database", TEST_SNOWFLAKE_DB)
-            .set("warehouse", TEST_SNOWFLAKE_WAREHOUSE)
-            .set("schema", TEST_SNOWFLAKE_SCHEMA)
-            .set("mode", "insert")
-            .set("match_by_column_name", "case_insensitive")
-            .set("table", targetTableName);
-    PartialExecutionException exception =
-        assertThrows(
-            PartialExecutionException.class,
-            () -> {
-              embulk.runOutput(config, in.toPath());
-            });
-    assertTrue(
-        exception.getCause().getMessage(),
-        exception.getCause().getMessage().matches(".*table column c1 is not found.*"));
-    assertFalse(
-        exception.getCause().getMessage(),
-        exception.getCause().getMessage().matches(".*input schema column .* is not found.*"));
+    ConfigSource config = createConfig(targetTableName, "insert", "case_insensitive");
+    PartialExecutionException exception = assertEmbulkThrows(config, in);
+    assertErrorMessageExcludeInputSchemaColumnNotFound(exception);
+    assertErrorMessageIncludeTargetTableColumnNotFound(exception, "c1");
   }
 
   @Ignore(

@@ -852,7 +852,8 @@ public class TestSnowflakeOutputPlugin {
   }
 
   @Test
-  public void testRuntimeWithMatchByColumnNameCaseNoneWhenOnlyPresentColumnInCSV() throws IOException {
+  public void testRuntimeWithMatchByColumnNameCaseNoneWhenOnlyPresentColumnInCSV()
+      throws IOException {
     final String targetTableName = generateTemporaryTableName();
     final String targetTableFullName = generateTableFullName(targetTableName);
 
@@ -866,7 +867,7 @@ public class TestSnowflakeOutputPlugin {
 
   @Test
   public void testRuntimeWithMatchByColumnNameNoneWhenOnlyPresentColumnInTable()
-          throws IOException {
+      throws IOException {
     final String targetTableName = generateTemporaryTableName();
     final String targetTableFullName = generateTableFullName(targetTableName);
 
@@ -875,7 +876,9 @@ public class TestSnowflakeOutputPlugin {
 
     ConfigSource config = createConfig(targetTableName, "insert", "none");
     PartialExecutionException exception = assertEmbulkThrows(config, in);
-    assertTrue(exception.getCause().getCause().getCause() instanceof net.snowflake.client.jdbc.SnowflakeSQLException);
+    assertTrue(
+        exception.getCause().getCause().getCause()
+            instanceof net.snowflake.client.jdbc.SnowflakeSQLException);
   }
 
   // MatchByColumnName = CaseSensitive
@@ -955,9 +958,8 @@ public class TestSnowflakeOutputPlugin {
 
   // Error
   @Test
-  public void
-      testRuntimeWithMatchByColumnNameCaseSensitiveWhenOnlyPresentColumnInCSVBySkip()
-          throws IOException {
+  public void testRuntimeWithMatchByColumnNameCaseSensitiveWhenOnlyPresentColumnInCSVBySkip()
+      throws IOException {
     final String targetTableName = generateTemporaryTableName();
     final String targetTableFullName = generateTableFullName(targetTableName);
 
@@ -971,7 +973,8 @@ public class TestSnowflakeOutputPlugin {
   }
 
   @Test
-  public void testRuntimeWithMatchByColumnNameCaseSensitiveWhenOnlyPresentColumnInTable() throws IOException {
+  public void testRuntimeWithMatchByColumnNameCaseSensitiveWhenOnlyPresentColumnInTable()
+      throws IOException {
     final String targetTableName = generateTemporaryTableName();
     final String targetTableFullName = generateTableFullName(targetTableName);
 
@@ -1043,7 +1046,8 @@ public class TestSnowflakeOutputPlugin {
 
   // Error
   @Test
-  public void testRuntimeWithMatchByColumnNameCaseInsensitiveWhenOnlyPresentColumnInCSVBySkip() throws IOException {
+  public void testRuntimeWithMatchByColumnNameCaseInsensitiveWhenOnlyPresentColumnInCSVBySkip()
+      throws IOException {
     final String targetTableName = generateTemporaryTableName();
     final String targetTableFullName = generateTableFullName(targetTableName);
 
@@ -1062,7 +1066,8 @@ public class TestSnowflakeOutputPlugin {
   }
 
   @Test
-  public void testRuntimeWithMatchByColumnNameCaseInsensitiveWhenOnlyPresentColumnInTable() throws IOException {
+  public void testRuntimeWithMatchByColumnNameCaseInsensitiveWhenOnlyPresentColumnInTable()
+      throws IOException {
     final String targetTableName = generateTemporaryTableName();
     final String targetTableFullName = generateTableFullName(targetTableName);
 

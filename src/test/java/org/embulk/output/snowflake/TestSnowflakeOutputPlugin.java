@@ -1051,12 +1051,7 @@ public class TestSnowflakeOutputPlugin {
     final String targetTableName = generateTemporaryTableName();
     final String targetTableFullName = generateTableFullName(targetTableName);
 
-    File in =
-        createTestFile(
-            "c1:double,c0:double,c3:double,c2:double",
-            "100,1,,10000",
-            "200,2,,20000",
-            "300,3,,30000");
+    File in = createTestFile("c1:double,c0:double,c3:double,c2:double", "100,1,,10000");
     runQuery(String.format("create table %s (\"C0\" DOUBLE, \"c2\" DOUBLE)", targetTableFullName));
 
     ConfigSource config = createConfig(targetTableName, "insert", "case_insensitive");

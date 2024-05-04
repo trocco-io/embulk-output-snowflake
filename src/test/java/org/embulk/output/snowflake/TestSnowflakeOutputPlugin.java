@@ -197,7 +197,8 @@ public class TestSnowflakeOutputPlugin {
     return in;
   }
 
-  private ConfigSource generateConfig(String targetTableName, String mode, String matchByColumnName) {
+  private ConfigSource generateConfig(
+      String targetTableName, String mode, String matchByColumnName) {
     return CONFIG_MAPPER_FACTORY
         .newConfigSource()
         .set("type", "snowflake")

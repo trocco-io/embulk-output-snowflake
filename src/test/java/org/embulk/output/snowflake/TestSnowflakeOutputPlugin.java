@@ -190,14 +190,14 @@ public class TestSnowflakeOutputPlugin {
             }));
   }
 
-  private File createTestFile(String... data) throws IOException {
+  private File generateTestFile(String... data) throws IOException {
     File in = testFolder.newFile(SnowflakeUtils.randomString(8) + ".csv");
     List<String> lines = Stream.of(data).collect(Collectors.toList());
     Files.write(in.toPath(), lines);
     return in;
   }
 
-  private ConfigSource createConfig(String targetTableName, String mode, String matchByColumnName) {
+  private ConfigSource generateConfig(String targetTableName, String mode, String matchByColumnName) {
     return CONFIG_MAPPER_FACTORY
         .newConfigSource()
         .set("type", "snowflake")
@@ -760,7 +760,7 @@ public class TestSnowflakeOutputPlugin {
     final Stream<String> csvColumnStream = Arrays.stream(csvColumns.split(","));
 
     final String header = csvColumnStream.map(x -> x + ":double").collect(Collectors.joining(","));
-    final File in = createTestFile(header, "100,1", "200,2", "300,3");
+    final File in = generateTestFile(header, "100,1", "200,2", "300,3");
 
     if (tableColumns != null) {
       Stream<String> tableColumnStream = Arrays.stream(tableColumns.split(","));
@@ -770,7 +770,7 @@ public class TestSnowflakeOutputPlugin {
       runQuery(String.format("create table %s (%s)", targetTableFullName, queryColumns));
     }
 
-    ConfigSource config = createConfig(targetTableName, mode, matchByColumnName);
+    ConfigSource config = generateConfig(targetTableName, mode, matchByColumnName);
     if (mode.equals("merge")) {
       String mergeColumns = tableColumns != null ? tableColumns : csvColumns;
       config.set("merge_keys", Arrays.stream(mergeColumns.split(",")).collect(Collectors.toList()));
@@ -857,10 +857,10 @@ public class TestSnowflakeOutputPlugin {
     final String targetTableName = generateTemporaryTableName();
     final String targetTableFullName = generateTableFullName(targetTableName);
 
-    File in = createTestFile("c1:double,c2:double,c3:double,c0:double", "100,1,,10000");
+    File in = generateTestFile("c1:double,c2:double,c3:double,c0:double", "100,1,,10000");
     runQuery(String.format("create table %s (\"c0\" DOUBLE, \"c2\" DOUBLE)", targetTableFullName));
 
-    ConfigSource config = createConfig(targetTableName, "insert", "none");
+    ConfigSource config = generateConfig(targetTableName, "insert", "none");
     embulk.runOutput(config, in.toPath());
     assertSelectResults(targetTableFullName, "c0,c2", "1.0,10000.0");
   }
@@ -871,10 +871,10 @@ public class TestSnowflakeOutputPlugin {
     final String targetTableName = generateTemporaryTableName();
     final String targetTableFullName = generateTableFullName(targetTableName);
 
-    File in = createTestFile("c0:double", "100");
+    File in = generateTestFile("c0:double", "100");
     runQuery(String.format("create table %s (\"c0\" DOUBLE, \"c1\" DOUBLE)", targetTableFullName));
 
-    ConfigSource config = createConfig(targetTableName, "insert", "none");
+    ConfigSource config = generateConfig(targetTableName, "insert", "none");
     PartialExecutionException exception = assertEmbulkThrows(config, in);
     assertTrue(
         exception.getCause().getCause().getCause()
@@ -944,13 +944,13 @@ public class TestSnowflakeOutputPlugin {
     final String targetTableName = generateTemporaryTableName();
     final String targetTableFullName = generateTableFullName(targetTableName);
 
-    File in = createTestFile("c1:double,c0:double,c3:double,c2:double", "100,1,,10000");
+    File in = generateTestFile("c1:double,c0:double,c3:double,c2:double", "100,1,,10000");
     runQuery(
         String.format(
             "create table %s (\"c0\" DOUBLE, \"C1\" DOUBLE, \"c2\" DOUBLE, \"C3\" DOUBLE)",
             targetTableFullName));
 
-    ConfigSource config = createConfig(targetTableName, "insert", "case_sensitive");
+    ConfigSource config = generateConfig(targetTableName, "insert", "case_sensitive");
     PartialExecutionException exception = assertEmbulkThrows(config, in);
     assertErrorMessageIncludeInputSchemaColumnNotFound(exception, "c1", "c3");
     assertErrorMessageIncludeTargetTableColumnNotFound(exception, "C1", "C3");
@@ -963,10 +963,10 @@ public class TestSnowflakeOutputPlugin {
     final String targetTableName = generateTemporaryTableName();
     final String targetTableFullName = generateTableFullName(targetTableName);
 
-    File in = createTestFile("c1:double,c0:double,c3:double,c2:double", "100,1,,10000");
+    File in = generateTestFile("c1:double,c0:double,c3:double,c2:double", "100,1,,10000");
     runQuery(String.format("create table %s (\"c0\" DOUBLE, \"c2\" DOUBLE)", targetTableFullName));
 
-    ConfigSource config = createConfig(targetTableName, "insert", "case_sensitive");
+    ConfigSource config = generateConfig(targetTableName, "insert", "case_sensitive");
     PartialExecutionException exception = assertEmbulkThrows(config, in);
     assertErrorMessageIncludeInputSchemaColumnNotFound(exception, "c1", "c3");
     assertErrorMessageExcludeTargetTableColumnNotFound(exception);
@@ -978,10 +978,10 @@ public class TestSnowflakeOutputPlugin {
     final String targetTableName = generateTemporaryTableName();
     final String targetTableFullName = generateTableFullName(targetTableName);
 
-    File in = createTestFile("c0:double", "100");
+    File in = generateTestFile("c0:double", "100");
     runQuery(String.format("create table %s (\"c0\" DOUBLE, \"c1\" DOUBLE)", targetTableFullName));
 
-    ConfigSource config = createConfig(targetTableName, "insert", "case_sensitive");
+    ConfigSource config = generateConfig(targetTableName, "insert", "case_sensitive");
     PartialExecutionException exception = assertEmbulkThrows(config, in);
     assertErrorMessageExcludeInputSchemaColumnNotFound(exception);
     assertErrorMessageIncludeTargetTableColumnNotFound(exception, "c1");
@@ -1051,10 +1051,10 @@ public class TestSnowflakeOutputPlugin {
     final String targetTableName = generateTemporaryTableName();
     final String targetTableFullName = generateTableFullName(targetTableName);
 
-    File in = createTestFile("c1:double,c0:double,c3:double,c2:double", "100,1,,10000");
+    File in = generateTestFile("c1:double,c0:double,c3:double,c2:double", "100,1,,10000");
     runQuery(String.format("create table %s (\"C0\" DOUBLE, \"c2\" DOUBLE)", targetTableFullName));
 
-    ConfigSource config = createConfig(targetTableName, "insert", "case_insensitive");
+    ConfigSource config = generateConfig(targetTableName, "insert", "case_insensitive");
     PartialExecutionException exception = assertEmbulkThrows(config, in);
     assertErrorMessageIncludeInputSchemaColumnNotFound(exception, "c1", "c3");
     assertErrorMessageExcludeTargetTableColumnNotFound(exception);
@@ -1066,10 +1066,10 @@ public class TestSnowflakeOutputPlugin {
     final String targetTableName = generateTemporaryTableName();
     final String targetTableFullName = generateTableFullName(targetTableName);
 
-    File in = createTestFile("c0:double", "100");
+    File in = generateTestFile("c0:double", "100");
     runQuery(String.format("create table %s (\"C0\" DOUBLE, \"c1\" DOUBLE)", targetTableFullName));
 
-    ConfigSource config = createConfig(targetTableName, "insert", "case_insensitive");
+    ConfigSource config = generateConfig(targetTableName, "insert", "case_insensitive");
     PartialExecutionException exception = assertEmbulkThrows(config, in);
     assertErrorMessageExcludeInputSchemaColumnNotFound(exception);
     assertErrorMessageIncludeTargetTableColumnNotFound(exception, "c1");

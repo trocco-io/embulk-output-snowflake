@@ -248,22 +248,7 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
             ? String::equals
             : String::equalsIgnoreCase;
 
-    Optional<JdbcSchema> initialTargetTableSchema =
-        pluginTask.getMode().ignoreTargetTableSchema()
-            ? Optional.empty()
-            : newJdbcSchemaFromTableIfExists(con, task.getActualTable());
-
-    List<String> invalidTableColumnNames = new ArrayList<>();
     List<String> invalidSchemaColumnNames = new ArrayList<>();
-    if (initialTargetTableSchema.isPresent()) {
-      for (JdbcColumn jdbcColumn : initialTargetTableSchema.get().getColumns()) {
-        if (schema.getColumns().stream()
-            .anyMatch((x) -> compare.apply(x.getName(), jdbcColumn.getName()))) {
-          continue;
-        }
-        invalidTableColumnNames.add(jdbcColumn.getName());
-      }
-    }
 
     int columnNumber = 1;
     for (int i = 0; i < targetTableSchema.getCount(); i++) {
@@ -281,21 +266,12 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
       }
       columnNumber += 1;
     }
-    if (!invalidTableColumnNames.isEmpty() || !invalidSchemaColumnNames.isEmpty()) {
-      List<String> msgs = new ArrayList<>();
-      if (!invalidTableColumnNames.isEmpty()) {
-        msgs.add(
-            String.format(
-                "table column %s is not found in input schema.",
-                String.join(", ", invalidTableColumnNames)));
-      }
-      if (!invalidSchemaColumnNames.isEmpty()) {
-        msgs.add(
-            String.format(
-                "input schema column %s is not found in target table.",
-                String.join(", ", invalidSchemaColumnNames)));
-      }
-      throw new UnsupportedOperationException(String.join(" ", msgs));
+    if (!invalidSchemaColumnNames.isEmpty()) {
+      String msg =
+          String.format(
+              "input schema column %s is not found in target table.",
+              String.join(", ", invalidSchemaColumnNames));
+      throw new UnsupportedOperationException(msg);
     }
     pluginTask.setCopyIntoTableColumnNames(copyIntoTableColumnNames.toArray(new String[0]));
     pluginTask.setCopyIntoCSVColumnNumbers(

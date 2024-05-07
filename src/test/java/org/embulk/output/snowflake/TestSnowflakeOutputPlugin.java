@@ -804,21 +804,6 @@ public class TestSnowflakeOutputPlugin {
     assertFalse(msg, msg.matches(regex));
   }
 
-  private void assertErrorMessageIncludeTargetTableColumnNotFound(
-      PartialExecutionException exception, String... missingColumns) {
-    String msg = exception.getCause().getMessage();
-    String columns = String.join(", ", missingColumns);
-    String regex = String.format(".*table column %s is not found in input schema.*", columns);
-    assertTrue(msg, msg.matches(regex));
-  }
-
-  private void assertErrorMessageExcludeTargetTableColumnNotFound(
-      PartialExecutionException exception) {
-    String msg = exception.getCause().getMessage();
-    String regex = ".*table column .* is not found in input schema.*";
-    assertFalse(msg, msg.matches(regex));
-  }
-
   @Test
   public void testRuntimeWithMatchByColumNameInvalid() {
     assertThrows(
@@ -910,34 +895,6 @@ public class TestSnowflakeOutputPlugin {
     execRuntimeForMatchByColumnName("merge", "case_sensitive", "c0,c1", "c1,c0", "c0,c1");
   }
 
-  // table absent
-
-  @Test
-  public void testRuntimeWithMatchByColumnNameSensitiveInsertInNoTable() throws IOException {
-    execRuntimeForMatchByColumnName("insert", "case_sensitive", "c0,c1", null, "c0,c1");
-  }
-
-  @Test
-  public void testRuntimeWithMatchByColumnNameSensitiveInsertDirectInNoTable() throws IOException {
-    execRuntimeForMatchByColumnName("insert_direct", "case_sensitive", "c0,c1", null, "c0,c1");
-  }
-
-  @Test
-  public void testRuntimeWithMatchByColumnNameSensitiveTruncateInsertInNoTable()
-      throws IOException {
-    execRuntimeForMatchByColumnName("truncate_insert", "case_sensitive", "c0,c1", null, "c0,c1");
-  }
-
-  @Test
-  public void testRuntimeWithMatchByColumnNameSensitiveReplaceInNoTable() throws IOException {
-    execRuntimeForMatchByColumnName("replace", "case_sensitive", "c0,c1", null, "c0,c1");
-  }
-
-  @Test
-  public void testRuntimeWithMatchByColumnNameSensitiveMergeInNoTable() throws IOException {
-    execRuntimeForMatchByColumnName("merge", "case_sensitive", "c0,c1", null, "c0,c1");
-  }
-
   @Test
   public void
       testRuntimeWithMatchByColumnNameCaseSensitiveWhenOnlyPresentColumnInCSVByCaseSensitive()
@@ -954,7 +911,6 @@ public class TestSnowflakeOutputPlugin {
     ConfigSource config = generateConfig(targetTableName, "insert", "case_sensitive");
     PartialExecutionException exception = assertEmbulkThrows(config, in);
     assertErrorMessageIncludeInputSchemaColumnNotFound(exception, "c1", "c3");
-    assertErrorMessageIncludeTargetTableColumnNotFound(exception, "C1", "C3");
   }
 
   // Error
@@ -970,7 +926,6 @@ public class TestSnowflakeOutputPlugin {
     ConfigSource config = generateConfig(targetTableName, "insert", "case_sensitive");
     PartialExecutionException exception = assertEmbulkThrows(config, in);
     assertErrorMessageIncludeInputSchemaColumnNotFound(exception, "c1", "c3");
-    assertErrorMessageExcludeTargetTableColumnNotFound(exception);
   }
 
   @Test
@@ -983,9 +938,9 @@ public class TestSnowflakeOutputPlugin {
     runQuery(String.format("create table %s (\"c0\" DOUBLE, \"c1\" DOUBLE)", targetTableFullName));
 
     ConfigSource config = generateConfig(targetTableName, "insert", "case_sensitive");
-    PartialExecutionException exception = assertEmbulkThrows(config, in);
-    assertErrorMessageExcludeInputSchemaColumnNotFound(exception);
-    assertErrorMessageIncludeTargetTableColumnNotFound(exception, "c1");
+
+    embulk.runOutput(config, in.toPath());
+    assertSelectResults(targetTableFullName, "c0,c1", "100.0,null");
   }
 
   // MatchByColumnName = CaseInsensitive
@@ -1017,34 +972,6 @@ public class TestSnowflakeOutputPlugin {
     execRuntimeForMatchByColumnName("merge", "case_insensitive", "c0,c1", "C1,c0", "c0,C1");
   }
 
-  // table absent
-  @Test
-  public void testRuntimeWithMatchByColumnNameInsensitiveInsertInNoTable() throws IOException {
-    execRuntimeForMatchByColumnName("insert", "case_insensitive", "c0,c1", null, "c0,c1");
-  }
-
-  @Test
-  public void testRuntimeWithMatchByColumnNameInsensitiveInsertDirectInNoTable()
-      throws IOException {
-    execRuntimeForMatchByColumnName("insert_direct", "case_insensitive", "c0,c1", null, "c0,c1");
-  }
-
-  @Test
-  public void testRuntimeWithMatchByColumnNameInsensitiveTruncateInsertInNoTable()
-      throws IOException {
-    execRuntimeForMatchByColumnName("truncate_insert", "case_insensitive", "c0,c1", null, "c0,c1");
-  }
-
-  @Test
-  public void testRuntimeWithMatchByColumnNameInsensitiveReplaceInNoTable() throws IOException {
-    execRuntimeForMatchByColumnName("replace", "case_insensitive", "c0,c1", null, "c0,c1");
-  }
-
-  @Test
-  public void testRuntimeWithMatchByColumnNameInsensitiveMergeInNoTable() throws IOException {
-    execRuntimeForMatchByColumnName("merge", "case_insensitive", "c0,c1", null, "c0,c1");
-  }
-
   // Error
   @Test
   public void testRuntimeWithMatchByColumnNameCaseInsensitiveWhenOnlyPresentColumnInCSVBySkip()
@@ -1058,7 +985,6 @@ public class TestSnowflakeOutputPlugin {
     ConfigSource config = generateConfig(targetTableName, "insert", "case_insensitive");
     PartialExecutionException exception = assertEmbulkThrows(config, in);
     assertErrorMessageIncludeInputSchemaColumnNotFound(exception, "c1", "c3");
-    assertErrorMessageExcludeTargetTableColumnNotFound(exception);
   }
 
   @Test
@@ -1071,9 +997,8 @@ public class TestSnowflakeOutputPlugin {
     runQuery(String.format("create table %s (\"C0\" DOUBLE, \"c1\" DOUBLE)", targetTableFullName));
 
     ConfigSource config = generateConfig(targetTableName, "insert", "case_insensitive");
-    PartialExecutionException exception = assertEmbulkThrows(config, in);
-    assertErrorMessageExcludeInputSchemaColumnNotFound(exception);
-    assertErrorMessageIncludeTargetTableColumnNotFound(exception, "c1");
+    embulk.runOutput(config, in.toPath());
+    assertSelectResults(targetTableFullName, "C0,c1", "100.0,null");
   }
 
   @Ignore(

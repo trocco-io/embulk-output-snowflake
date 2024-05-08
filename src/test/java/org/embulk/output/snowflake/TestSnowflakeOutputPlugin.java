@@ -805,7 +805,7 @@ public class TestSnowflakeOutputPlugin {
   }
 
   @Test
-  public void testRuntimeWithMatchByColumNameInvalid() {
+  public void testRuntimeWithMatchByColumnNameInvalid() {
     assertThrows(
         PartialExecutionException.class,
         () -> execRuntimeForMatchByColumnName("insert", "invalid", "c0", "c0", "c0"));
@@ -871,27 +871,27 @@ public class TestSnowflakeOutputPlugin {
 
   // table present
   @Test
-  public void testRuntimeWithMatchByColumnNameSensitiveInsert() throws IOException {
+  public void testRuntimeWithMatchByColumnNameCaseSensitiveInsert() throws IOException {
     execRuntimeForMatchByColumnName("insert", "case_sensitive", "c0,c1", "c1,c0", "c0,c1");
   }
 
   @Test
-  public void testRuntimeWithMatchByColumnNameSensitiveInsertDirect() throws IOException {
+  public void testRuntimeWithMatchByColumnNameCaseSensitiveInsertDirect() throws IOException {
     execRuntimeForMatchByColumnName("insert_direct", "case_sensitive", "c0,c1", "c1,c0", "c0,c1");
   }
 
   @Test
-  public void testRuntimeWithMatchByColumnNameSensitiveTruncateInsert() throws IOException {
+  public void testRuntimeWithMatchByColumnNameCaseSensitiveTruncateInsert() throws IOException {
     execRuntimeForMatchByColumnName("truncate_insert", "case_sensitive", "c0,c1", "c1,c0", "c0,c1");
   }
 
   @Test
-  public void testRuntimeWithMatchByColumnNameSensitiveReplace() throws IOException {
+  public void testRuntimeWithMatchByColumnNameCaseSensitiveReplace() throws IOException {
     execRuntimeForMatchByColumnName("replace", "case_sensitive", "c0,c1", "c1,c0", "c0,c1");
   }
 
   @Test
-  public void testRuntimeWithMatchByColumnNameSensitiveMerge() throws IOException {
+  public void testRuntimeWithMatchByColumnNameCaseSensitiveMerge() throws IOException {
     execRuntimeForMatchByColumnName("merge", "case_sensitive", "c0,c1", "c1,c0", "c0,c1");
   }
 
@@ -947,28 +947,28 @@ public class TestSnowflakeOutputPlugin {
 
   // table present
   @Test
-  public void testRuntimeWithMatchByColumnNameInsensitiveInsert() throws IOException {
+  public void testRuntimeWithMatchByColumnNameCaseInsensitiveInsert() throws IOException {
     execRuntimeForMatchByColumnName("insert", "case_insensitive", "c0,c1", "C1,c0", "c0,C1");
   }
 
   @Test
-  public void testRuntimeWithMatchByColumnNameInsensitiveInsertDirect() throws IOException {
+  public void testRuntimeWithMatchByColumnNameCaseInsensitiveInsertDirect() throws IOException {
     execRuntimeForMatchByColumnName("insert_direct", "case_insensitive", "c0,c1", "C1,c0", "c0,C1");
   }
 
   @Test
-  public void testRuntimeWithMatchByColumnNameInsensitiveTruncateInsert() throws IOException {
+  public void testRuntimeWithMatchByColumnNameCaseInsensitiveTruncateInsert() throws IOException {
     execRuntimeForMatchByColumnName(
         "truncate_insert", "case_insensitive", "c0,c1", "C1,c0", "c0,C1");
   }
 
   @Test
-  public void testRuntimeWithMatchByColumnNameInsensitiveReplace() throws IOException {
+  public void testRuntimeWithMatchByColumnNameCaseInsensitiveReplace() throws IOException {
     execRuntimeForMatchByColumnName("replace", "case_insensitive", "c0,c1", "C1,c0", "c0,c1");
   }
 
   @Test
-  public void testRuntimeWithMatchByColumnNameInsensitiveMerge() throws IOException {
+  public void testRuntimeWithMatchByColumnNameCaseInsensitiveMerge() throws IOException {
     execRuntimeForMatchByColumnName("merge", "case_insensitive", "c0,c1", "C1,c0", "c0,C1");
   }
 

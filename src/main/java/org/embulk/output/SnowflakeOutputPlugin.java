@@ -158,16 +158,15 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
     try {
       snowflakeCon = (SnowflakeOutputConnection) getConnector(task, true).connect(true);
       snowflakeCon.runCreateStage(stageIdentifier);
-      Thread.sleep(6 * 60 * 1000); // 6 minutes
       configDiff = super.transaction(config, schema, taskCount, control);
+      Thread.sleep(6 * 60 * 1000); // 6 minutes
       if (t.getDeleteStage()) {
-        snowflakeCon = (SnowflakeOutputConnection) getConnector(task, true).connect(true);
-        snowflakeCon.runDropStage(stageIdentifier);
+        runDropStage(snowflakeCon, stageIdentifier, task);
       }
     } catch (Exception e) {
       if (t.getDeleteStage() && t.getDeleteStageOnError()) {
         try {
-          snowflakeCon.runDropStage(stageIdentifier);
+          runDropStage(snowflakeCon, stageIdentifier, task);
         } catch (SQLException ex) {
           throw new RuntimeException(ex);
         }
@@ -176,6 +175,21 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
     }
 
     return configDiff;
+  }
+
+  private void runDropStage(
+      SnowflakeOutputConnection snowflakeCon, StageIdentifier stageIdentifier, PluginTask task)
+      throws SQLException {
+    try {
+      snowflakeCon.runDropStage(stageIdentifier);
+    } catch (RuntimeException ex) {
+      if (ex.getMessage().startsWith("Authentication token has expired.")) {
+        // INFO: If runCreateStage consumed a lot of time, authentication might be expired.
+        //       In this case, retry to drop stage.
+        snowflakeCon = (SnowflakeOutputConnection) getConnector(task, true).connect(true);
+        snowflakeCon.runDropStage(stageIdentifier);
+      }
+    }
   }
 
   @Override

@@ -161,6 +161,7 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
       Thread.sleep(6 * 60 * 1000); // 6 minutes
       configDiff = super.transaction(config, schema, taskCount, control);
       if (t.getDeleteStage()) {
+        snowflakeCon = (SnowflakeOutputConnection) getConnector(task, true).connect(true);
         snowflakeCon.runDropStage(stageIdentifier);
       }
     } catch (Exception e) {

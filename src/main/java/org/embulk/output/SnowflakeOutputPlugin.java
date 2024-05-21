@@ -7,6 +7,7 @@ import java.sql.SQLException;
 import java.sql.Types;
 import java.util.*;
 import java.util.function.BiFunction;
+import net.snowflake.client.jdbc.SnowflakeSQLException;
 import net.snowflake.client.jdbc.internal.org.bouncycastle.operator.OperatorCreationException;
 import net.snowflake.client.jdbc.internal.org.bouncycastle.pkcs.PKCSException;
 import org.embulk.config.ConfigDiff;
@@ -204,12 +205,12 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
       snowflakeCon.runCreateStage(stageIdentifier);
       configDiff = super.transaction(config, schema, taskCount, control);
       if (t.getDeleteStage()) {
-        snowflakeCon.runDropStage(stageIdentifier);
+        runDropStage(snowflakeCon, stageIdentifier, task);
       }
     } catch (Exception e) {
       if (t.getDeleteStage() && t.getDeleteStageOnError()) {
         try {
-          snowflakeCon.runDropStage(stageIdentifier);
+          runDropStage(snowflakeCon, stageIdentifier, task);
         } catch (SQLException ex) {
           throw new RuntimeException(ex);
         }
@@ -218,6 +219,27 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
     }
 
     return configDiff;
+  }
+
+  private void runDropStage(
+      SnowflakeOutputConnection snowflakeCon, StageIdentifier stageIdentifier, PluginTask task)
+      throws SQLException {
+    try {
+      snowflakeCon.runDropStage(stageIdentifier);
+    } catch (SnowflakeSQLException ex) {
+      logger.info("SnowflakeSQLException was caught: {}", ex.getMessage());
+
+      if (ex.getMessage().startsWith("Authentication token has expired.")
+          || ex.getMessage().startsWith("Session no longer exists.")) {
+
+        // INFO: If runCreateStage consumed a lot of time, authentication might be expired.
+        //       In this case, retry to drop stage.
+        snowflakeCon = (SnowflakeOutputConnection) getConnector(task, true).connect(true);
+        snowflakeCon.runDropStage(stageIdentifier);
+      } else {
+        throw ex;
+      }
+    }
   }
 
   @Override

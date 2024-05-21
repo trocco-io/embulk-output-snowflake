@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.sql.SQLException;
 import java.sql.Types;
 import java.util.*;
+import net.snowflake.client.jdbc.SnowflakeSQLException;
 import net.snowflake.client.jdbc.internal.org.bouncycastle.operator.OperatorCreationException;
 import net.snowflake.client.jdbc.internal.org.bouncycastle.pkcs.PKCSException;
 import org.embulk.config.ConfigDiff;
@@ -182,12 +183,18 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
       throws SQLException {
     try {
       snowflakeCon.runDropStage(stageIdentifier);
-    } catch (RuntimeException ex) {
-      if (ex.getMessage().startsWith("Authentication token has expired.")) {
+    } catch (SnowflakeSQLException ex) {
+      logger.info("SnowflakeSQLException was caught: {}", ex.getMessage());
+
+      if (ex.getMessage().startsWith("Authentication token has expired.")
+          || ex.getMessage().startsWith("Session no longer exists.")) {
+
         // INFO: If runCreateStage consumed a lot of time, authentication might be expired.
         //       In this case, retry to drop stage.
         snowflakeCon = (SnowflakeOutputConnection) getConnector(task, true).connect(true);
         snowflakeCon.runDropStage(stageIdentifier);
+      } else {
+        throw ex;
       }
     }
   }

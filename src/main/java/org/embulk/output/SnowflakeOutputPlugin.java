@@ -185,6 +185,8 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
       snowflakeCon.runDropStage(stageIdentifier);
     } catch (SnowflakeSQLException ex) {
       logger.info("SnowflakeSQLException was caught: {}", ex.getMessage());
+      logger.info("getErrorCode: {}", ex.getErrorCode());
+      logger.info("toString: {}", ex.toString());
 
       if (ex.getMessage().startsWith("Authentication token has expired.")
           || ex.getMessage().startsWith("Session no longer exists.")) {

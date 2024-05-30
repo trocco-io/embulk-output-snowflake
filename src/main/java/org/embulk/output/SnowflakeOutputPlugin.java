@@ -81,6 +81,16 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
     public boolean getDeleteStageOnError();
   }
 
+  // error codes which need reauthenticate
+  // ref:
+  // https://github.com/snowflakedb/snowflake-jdbc/blob/v3.13.26/src/main/java/net/snowflake/client/jdbc/SnowflakeUtil.java#L42
+  private static final int ID_TOKEN_EXPIRED_GS_CODE = 390110;
+  private static final int SESSION_NOT_EXIST_GS_CODE = 390111;
+  private static final int MASTER_TOKEN_NOTFOUND = 390113;
+  private static final int MASTER_EXPIRED_GS_CODE = 390114;
+  private static final int MASTER_TOKEN_INVALID_GS_CODE = 390115;
+  private static final int ID_TOKEN_INVALID_LOGIN_REQUEST_GS_CODE = 390195;
+
   @Override
   protected Class<? extends PluginTask> getTaskClass() {
     return SnowflakePluginTask.class;
@@ -188,15 +198,20 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
       logger.info("getErrorCode: {}", ex.getErrorCode());
       logger.info("toString: {}", ex.toString());
 
-      if (ex.getMessage().startsWith("Authentication token has expired.")
-          || ex.getMessage().startsWith("Session no longer exists.")) {
-
-        // INFO: If runCreateStage consumed a lot of time, authentication might be expired.
-        //       In this case, retry to drop stage.
-        snowflakeCon = (SnowflakeOutputConnection) getConnector(task, true).connect(true);
-        snowflakeCon.runDropStage(stageIdentifier);
-      } else {
-        throw ex;
+      switch (ex.getErrorCode()) {
+        case ID_TOKEN_EXPIRED_GS_CODE:
+        case SESSION_NOT_EXIST_GS_CODE:
+        case MASTER_TOKEN_NOTFOUND:
+        case MASTER_EXPIRED_GS_CODE:
+        case MASTER_TOKEN_INVALID_GS_CODE:
+        case ID_TOKEN_INVALID_LOGIN_REQUEST_GS_CODE:
+          // INFO: If runCreateStage consumed a lot of time, authentication might be expired.
+          //       In this case, retry to drop stage.
+          snowflakeCon = (SnowflakeOutputConnection) getConnector(task, true).connect(true);
+          snowflakeCon.runDropStage(stageIdentifier);
+          break;
+        default:
+          throw ex;
       }
     }
   }

@@ -6,8 +6,12 @@ import java.time.Instant;
 import org.embulk.output.jdbc.BatchInsert;
 import org.embulk.output.jdbc.JdbcColumn;
 import org.msgpack.value.Value;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class NullColumnSetter extends ColumnSetter {
+  protected static final Logger logger = LoggerFactory.getLogger(NullColumnSetter.class);
+
   public NullColumnSetter(BatchInsert batch, JdbcColumn column, DefaultValueSetter defaultValue) {
     super(batch, column, defaultValue);
   }
@@ -19,6 +23,7 @@ public class NullColumnSetter extends ColumnSetter {
 
   @Override
   public void longValue(long v) throws IOException, SQLException {
+    logger.info("NullColumnSetter: setNull({})", v);
     defaultValue.setNull();
   }
 

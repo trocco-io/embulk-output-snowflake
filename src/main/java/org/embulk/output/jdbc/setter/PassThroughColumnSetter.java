@@ -7,8 +7,12 @@ import java.util.Calendar;
 import org.embulk.output.jdbc.BatchInsert;
 import org.embulk.output.jdbc.JdbcColumn;
 import org.msgpack.value.Value;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class PassThroughColumnSetter extends ColumnSetter {
+  protected static final Logger logger = LoggerFactory.getLogger(PassThroughColumnSetter.class);
+
   private final Calendar calendar;
 
   public PassThroughColumnSetter(
@@ -19,6 +23,7 @@ public class PassThroughColumnSetter extends ColumnSetter {
 
   @Override
   public void nullValue() throws IOException, SQLException {
+    logger.info("PassThroughColumnSetter: setNull()");
     batch.setNull(column.getSqlType());
   }
 

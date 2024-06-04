@@ -4,8 +4,12 @@ import java.io.IOException;
 import java.sql.SQLException;
 import org.embulk.output.jdbc.BatchInsert;
 import org.embulk.output.jdbc.JdbcColumn;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class NullDefaultValueSetter extends DefaultValueSetter {
+  protected static final Logger logger = LoggerFactory.getLogger(NullDefaultValueSetter.class);
+
   public NullDefaultValueSetter(BatchInsert batch, JdbcColumn column) {
     super(batch, column);
   }
@@ -37,6 +41,7 @@ public class NullDefaultValueSetter extends DefaultValueSetter {
 
   @Override
   public void setLong() throws IOException, SQLException {
+    logger.info("NullColumnSetter: setNull({})", column.getSqlType());
     batch.setNull(column.getSqlType());
   }
 

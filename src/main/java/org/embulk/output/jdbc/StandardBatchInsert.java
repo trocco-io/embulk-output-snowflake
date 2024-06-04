@@ -101,6 +101,8 @@ public class StandardBatchInsert implements BatchInsert {
   public void finish() throws IOException, SQLException {}
 
   public void setNull(int sqlType) throws IOException, SQLException {
+    logger.info("StandardBatchInsert: setNull({})", sqlType);
+
     batch.setNull(index, sqlType);
     nextColumn(0);
   }

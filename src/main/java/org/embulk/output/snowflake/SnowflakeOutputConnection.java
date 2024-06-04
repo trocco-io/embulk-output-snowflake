@@ -5,6 +5,8 @@ import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.List;
+import java.util.Optional;
+
 import net.snowflake.client.jdbc.SnowflakeConnection;
 import org.embulk.output.jdbc.JdbcColumn;
 import org.embulk.output.jdbc.JdbcOutputConnection;
@@ -285,6 +287,34 @@ public class SnowflakeOutputConnection extends JdbcOutputConnection {
       sb.append(prefix);
       sb.append(quoteIdentifierString(schema.getColumnName(i)));
     }
+    return sb.toString();
+  }
+
+  @Override
+  protected String buildCreateTableIfNotExistsSql(TableIdentifier table, JdbcSchema schema, Optional<String> tableConstraint, Optional<String> tableOption) {
+    StringBuilder sb = new StringBuilder();
+    sb.append("CREATE TRANSIENT TABLE IF NOT EXISTS ");
+    this.quoteTableIdentifier(sb, table);
+    sb.append(this.buildCreateTableSchemaSql(schema, tableConstraint));
+    if (tableOption.isPresent()) {
+      sb.append(" ");
+      sb.append((String)tableOption.get());
+    }
+
+    return sb.toString();
+  }
+
+  @Override
+  protected String buildCreateTableSql(TableIdentifier table, JdbcSchema schema, Optional<String> tableConstraint, Optional<String> tableOption) {
+    StringBuilder sb = new StringBuilder();
+    sb.append("CREATE TRANSIENT TABLE ");
+    this.quoteTableIdentifier(sb, table);
+    sb.append(this.buildCreateTableSchemaSql(schema, tableConstraint));
+    if (tableOption.isPresent()) {
+      sb.append(" ");
+      sb.append((String)tableOption.get());
+    }
+
     return sb.toString();
   }
 }

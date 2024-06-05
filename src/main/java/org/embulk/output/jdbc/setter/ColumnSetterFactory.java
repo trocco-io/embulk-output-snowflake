@@ -70,6 +70,7 @@ public class ColumnSetterFactory {
       case "json":
         return new JsonColumnSetter(batch, column, newDefaultValueSetter(column, option));
       case "null":
+        logger.info("ColumnSetterFactory: newColumnSetter: {}", option.getType());
         return new NullColumnSetter(batch, column, newDefaultValueSetter(column, option));
       case "pass":
         return new PassThroughColumnSetter(

@@ -523,6 +523,7 @@ public abstract class AbstractJdbcOutputPlugin implements OutputPlugin {
   protected void doBegin(
       JdbcOutputConnection con, PluginTask task, final Schema schema, int taskCount)
       throws SQLException {
+    logger.info("AbstractJdbcOutputPlugin::doBegin");
     if (schema.getColumnCount() == 0) {
       throw new ConfigException("No column.");
     }
@@ -857,6 +858,7 @@ public abstract class AbstractJdbcOutputPlugin implements OutputPlugin {
       JdbcSchema targetTableSchema,
       Schema inputValueSchema,
       Map<String, JdbcColumnOption> columnOptions) {
+    logger.info("AbstractJdbcOutputPlugin::newColumnSetters");
     final ArrayList<ColumnSetter> builder = new ArrayList<>();
     for (int schemaColumnIndex = 0;
         schemaColumnIndex < targetTableSchema.getCount();
@@ -1126,6 +1128,8 @@ public abstract class AbstractJdbcOutputPlugin implements OutputPlugin {
   }
 
   public TransactionalPageOutput open(TaskSource taskSource, Schema schema, final int taskIndex) {
+    logger.info("AbstractJdbcOutputPlugin::open");
+
     final PluginTask task = TASK_MAPPER.map(taskSource, this.getTaskClass());
     final Mode mode = task.getMode();
 

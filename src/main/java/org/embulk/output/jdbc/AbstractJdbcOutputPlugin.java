@@ -432,6 +432,7 @@ public abstract class AbstractJdbcOutputPlugin implements OutputPlugin {
     }
 
     task = begin(task, schema, taskCount);
+    logger.info("transaction: dump: {}", task.dump());
     control.run(task.dump());
     return commit(task, schema, taskCount);
   }

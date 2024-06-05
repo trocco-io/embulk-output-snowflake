@@ -33,6 +33,7 @@ public class ColumnSetterFactory {
   }
 
   public ColumnSetter newColumnSetter(JdbcColumn column, JdbcColumnOption option) {
+    logger.info("ColumnSetterFactory: newColumnSetter: {}", option.getType());
     switch (option.getValueType()) {
       case "coerce":
         return newCoalesceColumnSetter(column, option);
@@ -70,7 +71,6 @@ public class ColumnSetterFactory {
       case "json":
         return new JsonColumnSetter(batch, column, newDefaultValueSetter(column, option));
       case "null":
-        logger.info("ColumnSetterFactory: newColumnSetter: {}", option.getType());
         return new NullColumnSetter(batch, column, newDefaultValueSetter(column, option));
       case "pass":
         return new PassThroughColumnSetter(

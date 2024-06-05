@@ -51,7 +51,7 @@ public class ColumnSetterVisitor implements ColumnVisitor {
 
   @Override
   public void doubleColumn(Column column) {
-    logger.info("ColumnSetterVisitor: doubleColumn: {}", record.getString(column));
+    logger.info("ColumnSetterVisitor: doubleColumn: {}", record);
     try {
       if (record.isNull(column)) {
         setter.nullValue();

@@ -41,7 +41,7 @@ public class NullDefaultValueSetter extends DefaultValueSetter {
 
   @Override
   public void setLong() throws IOException, SQLException {
-    logger.info("NullColumnSetter: setNull({})", column.getSqlType());
+    logger.info("NullDefaultValueSetter: setNull({})", column.getSqlType());
     batch.setNull(column.getSqlType());
   }
 

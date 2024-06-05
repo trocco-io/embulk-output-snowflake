@@ -443,7 +443,8 @@ public abstract class AbstractJdbcOutputPlugin implements OutputPlugin {
   private List<String> splitByLength(String str, int length) {
     List<String> strs = new ArrayList<>();
     for (int i = 0; i < str.length(); i += length) {
-      strs.add(str.substring(i, i + length));
+      int end = Math.min(i + length, str.length());
+      strs.add(str.substring(i, end));
     }
     return strs;
   }

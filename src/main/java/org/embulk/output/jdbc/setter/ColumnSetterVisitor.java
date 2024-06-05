@@ -5,8 +5,12 @@ import java.sql.SQLException;
 import org.embulk.output.jdbc.Record;
 import org.embulk.spi.Column;
 import org.embulk.spi.ColumnVisitor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class ColumnSetterVisitor implements ColumnVisitor {
+  private static final Logger logger = LoggerFactory.getLogger(ColumnSetterVisitor.class);
+
   private final Record record;
   private final ColumnSetter setter;
 
@@ -31,6 +35,7 @@ public class ColumnSetterVisitor implements ColumnVisitor {
 
   @Override
   public void longColumn(Column column) {
+    logger.info("ColumnSetterVisitor: longColumn: {}", record.getString(column));
     try {
       if (record.isNull(column)) {
         setter.nullValue();

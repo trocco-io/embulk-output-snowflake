@@ -432,9 +432,20 @@ public abstract class AbstractJdbcOutputPlugin implements OutputPlugin {
     }
 
     task = begin(task, schema, taskCount);
-    logger.info("transaction: dump: {}", task.dump());
+    List<String> strs = splitByLength(task.getTable(), 30);
+    for (String str : strs) {
+      logger.info("transaction: dump: {}", str);
+    }
     control.run(task.dump());
     return commit(task, schema, taskCount);
+  }
+
+  private List<String> splitByLength(String str, int length) {
+    List<String> strs = new ArrayList<>();
+    for (int i = 0; i < str.length(); i += length) {
+      strs.add(str.substring(i, i + length));
+    }
+    return strs;
   }
 
   public ConfigDiff resume(TaskSource taskSource, Schema schema, int taskCount, Control control) {

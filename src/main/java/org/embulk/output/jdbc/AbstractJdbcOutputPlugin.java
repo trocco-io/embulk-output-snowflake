@@ -432,7 +432,7 @@ public abstract class AbstractJdbcOutputPlugin implements OutputPlugin {
     }
 
     task = begin(task, schema, taskCount);
-    List<String> strs = splitByLength(task.getTable(), 30);
+    List<String> strs = splitByLength(task.dump().toJson(), 30);
     for (String str : strs) {
       logger.info("transaction: dump: {}", str);
     }

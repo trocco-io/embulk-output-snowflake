@@ -21,6 +21,7 @@ public class ColumnSetterVisitor implements ColumnVisitor {
 
   @Override
   public void booleanColumn(Column column) {
+    logger.info("ColumnSetterVisitor: booleanColumn: {}", record.getString(column));
     try {
       if (record.isNull(column)) {
         setter.nullValue();
@@ -50,6 +51,7 @@ public class ColumnSetterVisitor implements ColumnVisitor {
 
   @Override
   public void doubleColumn(Column column) {
+    logger.info("ColumnSetterVisitor: doubleColumn: {}", record.getString(column));
     try {
       if (record.isNull(column)) {
         setter.nullValue();
@@ -64,6 +66,7 @@ public class ColumnSetterVisitor implements ColumnVisitor {
 
   @Override
   public void stringColumn(Column column) {
+    logger.info("ColumnSetterVisitor: stringColumn: {}", record.getString(column));
     try {
       if (record.isNull(column)) {
         setter.nullValue();
@@ -78,6 +81,7 @@ public class ColumnSetterVisitor implements ColumnVisitor {
 
   @Override
   public void jsonColumn(Column column) {
+    logger.info("ColumnSetterVisitor: jsonColumn: {}", record.getString(column));
     try {
       if (record.isNull(column)) {
         setter.nullValue();
@@ -92,6 +96,7 @@ public class ColumnSetterVisitor implements ColumnVisitor {
 
   @Override
   public void timestampColumn(Column column) {
+    logger.info("ColumnSetterVisitor: timestampColumn: {}", record.getString(column));
     try {
       if (record.isNull(column)) {
         setter.nullValue();

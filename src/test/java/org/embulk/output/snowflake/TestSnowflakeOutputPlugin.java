@@ -1,6 +1,7 @@
 package org.embulk.output.snowflake;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
@@ -209,7 +210,8 @@ public class TestSnowflakeOutputPlugin {
     assertEquals("", task.getPassword());
     assertEquals("public", task.getSchema());
     assertEquals("", task.getRole());
-    assertEquals(false, task.getDeleteStage());
+    assertFalse(task.getDeleteStage());
+    assertTrue(task.getTreatDecimalAsInt());
   }
 
   @Test

@@ -6,8 +6,12 @@ import java.time.Instant;
 import org.embulk.output.jdbc.BatchInsert;
 import org.embulk.output.jdbc.JdbcColumn;
 import org.msgpack.value.Value;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class LongColumnSetter extends ColumnSetter {
+  private static final Logger logger = LoggerFactory.getLogger(LongColumnSetter.class);
+
   public LongColumnSetter(BatchInsert batch, JdbcColumn column, DefaultValueSetter defaultValue) {
     super(batch, column, defaultValue);
   }
@@ -47,6 +51,7 @@ public class LongColumnSetter extends ColumnSetter {
     try {
       lv = Long.parseLong(v);
     } catch (NumberFormatException e) {
+      logger.info("Failed to parse a value as long: '{}'", v);
       defaultValue.setLong();
       return;
     }

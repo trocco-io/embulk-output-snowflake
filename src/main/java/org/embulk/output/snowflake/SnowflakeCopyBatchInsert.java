@@ -59,7 +59,7 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
     this.stageIdentifier = stageIdentifier;
     this.copyIntoTableColumnNames = copyIntoTableColumnNames;
     this.copyIntoCSVColumnNumbers = copyIntoCSVColumnNumbers;
-    this.executorService = Executors.newCachedThreadPool();
+    this.executorService = new MemoryAwareCachedThreadPoolExecutor();
     this.deleteStageFile = deleteStageFile;
     this.uploadAndCopyFutures = new ArrayList();
     this.maxUploadRetries = maxUploadRetries;
@@ -282,11 +282,17 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
   }
 
   public void close() throws IOException, SQLException {
-    executorService.shutdownNow();
+    executorService.shutdown();
 
     try {
-      executorService.awaitTermination(60, TimeUnit.SECONDS);
-    } catch (InterruptedException e) {
+      if (!executorService.awaitTermination(60, TimeUnit.SECONDS)) {
+        executorService.shutdownNow();
+        if (!executorService.awaitTermination(60, TimeUnit.SECONDS)) {
+          logger.error("ExecutorService did not terminate");
+        }
+      }
+    } catch (InterruptedException ie) {
+      Thread.currentThread().interrupt();
     }
 
     closeCurrentFile().delete();

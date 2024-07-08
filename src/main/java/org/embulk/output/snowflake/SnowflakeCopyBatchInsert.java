@@ -438,8 +438,7 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
       try {
         uploadFuture.get();
 
-        SnowflakeOutputConnection con = (SnowflakeOutputConnection) connector.connect(true);
-        try {
+        try (SnowflakeOutputConnection con = (SnowflakeOutputConnection) connector.connect(true)) {
           logger.info("Running COPY from file {}", snowflakeStageFileName);
 
           long startTime = System.currentTimeMillis();
@@ -457,9 +456,6 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
           logger.info(
               String.format(
                   "Loaded file %s (%.2f seconds for COPY)", snowflakeStageFileName, seconds));
-
-        } finally {
-          con.close();
         }
       } finally {
         if (deleteStageFile) {

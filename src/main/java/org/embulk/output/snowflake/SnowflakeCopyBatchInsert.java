@@ -398,6 +398,13 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
 
       return null;
     }
+
+    @Override
+    public String toString() {
+      return String.format(
+          "UploadTask[file=%s, batchRows=%d, stageIdentifier=%s, snowflakeStageFileName=%s, maxUploadRetries=%d]",
+          file, batchRows, stageIdentifier, snowflakeStageFileName, maxUploadRetries);
+    }
   }
 
   private class CopyTask implements Callable<Void> {
@@ -446,6 +453,13 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
       }
 
       return null;
+    }
+
+    @Override
+    public String toString() {
+      return String.format(
+          "CopyTask[uploadFuture=%s, snowflakeStageFileName=%s, emptyFieldAsNull=%s]",
+          uploadFuture, snowflakeStageFileName, emptyFieldAsNull);
     }
   }
 }

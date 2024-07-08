@@ -2,9 +2,12 @@ package org.embulk.output.snowflake;
 
 import java.io.*;
 import java.math.BigDecimal;
+import java.nio.channels.Channels;
+import java.nio.channels.FileChannel;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.sql.SQLException;
 import java.time.Instant;
 import java.util.*;
@@ -374,39 +377,39 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
 
     public Void call() throws IOException, SQLException, InterruptedException {
       int retries = 0;
-      try {
-        long startTime = System.currentTimeMillis();
-        // put file to snowflake internal storage
-        SnowflakeOutputConnection con = (SnowflakeOutputConnection) connector.connect(true);
+      long startTime = System.currentTimeMillis();
+      Path path = file.toPath();
+      // put file to snowflake internal storage
 
-        while (true) {
-          try {
-            logger.info(
-                String.format(
-                    "Uploading file id %s to Snowflake (%,d bytes %,d rows)",
-                    snowflakeStageFileName, file.length(), batchRows));
-            FileInputStream fileInputStream = new FileInputStream(file);
-            con.runUploadFile(stageIdentifier, snowflakeStageFileName, fileInputStream);
-            break;
-          } catch (SQLException e) {
-            retries++;
-            if (retries > this.maxUploadRetries) {
-              throw e;
-            }
-            logger.warn(
-                String.format(
-                    "Upload error %s file %s retries: %d", e, snowflakeStageFileName, retries));
-            Thread.sleep(retries * retries * 1000);
+      while (true) {
+        try (SnowflakeOutputConnection con = (SnowflakeOutputConnection) connector.connect(true);
+            FileChannel fileChannel = FileChannel.open(path, StandardOpenOption.READ);
+            BufferedInputStream bufferedInputStream =
+                new BufferedInputStream(Channels.newInputStream(fileChannel))) {
+          logger.info(
+              String.format(
+                  "Uploading file id %s to Snowflake (%,d bytes %,d rows)",
+                  snowflakeStageFileName, file.length(), batchRows));
+          con.runUploadFile(stageIdentifier, snowflakeStageFileName, bufferedInputStream);
+          break;
+        } catch (SQLException e) {
+          retries++;
+          if (retries > this.maxUploadRetries) {
+            throw e;
           }
+          logger.warn(
+              String.format(
+                  "Upload error %s file %s retries: %d", e, snowflakeStageFileName, retries));
+          Thread.sleep(retries * retries * 1000);
         }
-
-        double seconds = (System.currentTimeMillis() - startTime) / 1000.0;
-
-        logger.info(
-            String.format("Uploaded file %s (%.2f seconds)", snowflakeStageFileName, seconds));
-      } finally {
-        file.delete();
       }
+
+      double seconds = (System.currentTimeMillis() - startTime) / 1000.0;
+
+      logger.info(
+          String.format("Uploaded file %s (%.2f seconds)", snowflakeStageFileName, seconds));
+
+      file.delete();
 
       return null;
     }

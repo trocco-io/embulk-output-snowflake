@@ -1,6 +1,6 @@
 package org.embulk.output.snowflake;
 
-import java.io.FileInputStream;
+import java.io.BufferedInputStream;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -59,14 +59,14 @@ public class SnowflakeOutputConnection extends JdbcOutputConnection {
   }
 
   public void runUploadFile(
-      StageIdentifier stageIdentifier, String filename, FileInputStream fileInputStream)
+      StageIdentifier stageIdentifier, String filename, BufferedInputStream bufferedInputStream)
       throws SQLException {
     connection
         .unwrap(SnowflakeConnection.class)
         .uploadStream(
             stageIdentifier.getStageName(),
             stageIdentifier.getDestPrefix().orElse("/"),
-            fileInputStream,
+            bufferedInputStream,
             filename + ".csv.gz",
             false);
   }

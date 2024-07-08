@@ -3,6 +3,8 @@ package org.embulk.output.snowflake;
 import java.io.*;
 import java.math.BigDecimal;
 import java.nio.charset.Charset;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.sql.SQLException;
 import java.time.Instant;
 import java.util.*;
@@ -94,9 +96,13 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
   }
 
   protected BufferedWriter openWriter(File newFile) throws IOException {
+    Path path = newFile.toPath();
+
     // Snowflake supports gzip
     return new BufferedWriter(
-        new OutputStreamWriter(new GZIPOutputStream(new FileOutputStream(newFile)), FILE_CHARSET));
+        new OutputStreamWriter(
+            new GZIPOutputStream(new BufferedOutputStream(Files.newOutputStream(path))),
+            FILE_CHARSET));
   }
 
   public int getBatchWeight() {

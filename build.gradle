@@ -42,6 +42,10 @@ dependencies {
     compile("org.embulk:embulk-util-json:0.1.0") {
         exclude group: "org.msgpack", module: "msgpack-core"  // Included in embulk-api.
     }
+    testImplementation "org.junit.jupiter:junit-jupiter-api:5.+"
+    testImplementation "org.junit.jupiter:junit-jupiter-engine:5.+"
+    testImplementation "org.junit.jupiter:junit-jupiter-params:5.+"
+    testImplementation "org.junit.vintage:junit-vintage-engine:5.+"
     testImplementation "junit:junit:4.+"
     testImplementation "org.embulk:embulk-junit4:0.10.31"
     testImplementation "org.embulk:embulk-core:0.10.31"
@@ -49,6 +53,7 @@ dependencies {
     testImplementation "org.embulk:embulk-deps:0.10.31"
     testImplementation "org.embulk:embulk-input-file:0.10.31"
     testImplementation "org.embulk:embulk-parser-csv:0.10.31"
+    testImplementation "org.mockito:mockito-core:3.9.0"
 
     compile "org.embulk:embulk-output-jdbc:0.10.2"
     compile "net.snowflake:snowflake-jdbc:3.13.26"
@@ -90,5 +95,15 @@ spotless {
         importOrder()
         removeUnusedImports()
         googleJavaFormat()
+    }
+}
+
+test {
+    useJUnitPlatform()
+
+    testLogging {
+        showStandardStreams = true
+        events "started", "skipped", "passed", "failed"
+        exceptionFormat = "full"
     }
 }

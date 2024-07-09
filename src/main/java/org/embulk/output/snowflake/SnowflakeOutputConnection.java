@@ -78,11 +78,8 @@ public class SnowflakeOutputConnection extends JdbcOutputConnection {
   }
 
   protected void runUpdate(String sql) throws SQLException {
-    Statement stmt = connection.createStatement();
-    try {
+    try (Statement stmt = connection.createStatement()) {
       stmt.executeUpdate(sql);
-    } finally {
-      stmt.close();
     }
   }
 

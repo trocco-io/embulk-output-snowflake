@@ -20,9 +20,10 @@ public class PrivateKeyReader {
   public static PrivateKey get(String pemString, String passphrase)
       throws IOException, OperatorCreationException, PKCSException {
     Security.addProvider(new BouncyCastleProvider());
-    PEMParser pemParser = new PEMParser(new StringReader(pemString));
-    Object pemObject = pemParser.readObject();
-    pemParser.close();
+    Object pemObject;
+    try (PEMParser pemParser = new PEMParser(new StringReader(pemString))) {
+      pemObject = pemParser.readObject();
+    }
 
     PrivateKeyInfo privateKeyInfo;
     if (pemObject instanceof PKCS8EncryptedPrivateKeyInfo) {

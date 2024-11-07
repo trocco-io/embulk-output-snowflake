@@ -215,12 +215,12 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
       snowflakeCon.runCreateStage(stageIdentifier);
       configDiff = super.transaction(config, schema, taskCount, control);
       if (t.getDeleteStage()) {
-        runDropStage(snowflakeCon, stageIdentifier, task);
+        runDropStageWithRecovery(snowflakeCon, stageIdentifier, task);
       }
     } catch (Exception e) {
       if (t.getDeleteStage() && t.getDeleteStageOnError()) {
         try {
-          runDropStage(snowflakeCon, stageIdentifier, task);
+          runDropStageWithRecovery(snowflakeCon, stageIdentifier, task);
         } catch (SQLException ex) {
           throw new RuntimeException(ex);
         }
@@ -231,7 +231,7 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
     return configDiff;
   }
 
-  private void runDropStage(
+  private void runDropStageWithRecovery(
       SnowflakeOutputConnection snowflakeCon, StageIdentifier stageIdentifier, PluginTask task)
       throws SQLException {
     try {

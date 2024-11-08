@@ -178,8 +178,7 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
         throw new ConfigException(e);
       }
     }
-
-    props.setProperty("warehouse", t.getWarehouse());
+    props.setProperty("warehouse", wrapDoubleQuates(t.getWarehouse()));
     props.setProperty("db", t.getDatabase());
     props.setProperty("schema", t.getSchema());
     if (!t.getRole().isEmpty()) {
@@ -407,5 +406,13 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
           });
     }
     return new JdbcSchema(Collections.unmodifiableList(columns));
+  }
+
+  private String wrapDoubleQuates(String s) {
+    if (s.startsWith("\"") && s.endsWith("\"")) {
+      return s;
+    }
+
+    return "\"" + s + "\"";
   }
 }

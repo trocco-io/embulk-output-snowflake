@@ -287,18 +287,31 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
         matchByColumnName == SnowflakePluginTask.MatchByColumnName.CASE_SENSITIVE
             ? String::equals
             : String::equalsIgnoreCase;
+
+    List<String> invalidSchemaColumnNames = new ArrayList<>();
+
     int columnNumber = 1;
     for (int i = 0; i < targetTableSchema.getCount(); i++) {
       JdbcColumn targetColumn = targetTableSchema.getColumn(i);
+      Column schemaColumn = schema.getColumn(i);
       if (targetColumn.isSkipColumn()) {
+        invalidSchemaColumnNames.add(schemaColumn.getName());
         continue;
       }
-      Column schemaColumn = schema.getColumn(i);
       if (compare.apply(schemaColumn.getName(), targetColumn.getName())) {
         copyIntoTableColumnNames.add(targetColumn.getName());
         copyIntoCSVColumnNumbers.add(columnNumber);
+      } else {
+        invalidSchemaColumnNames.add(schemaColumn.getName());
       }
       columnNumber += 1;
+    }
+    if (!invalidSchemaColumnNames.isEmpty()) {
+      String msg =
+          String.format(
+              "input schema column %s is not found in target table.",
+              String.join(", ", invalidSchemaColumnNames));
+      throw new UnsupportedOperationException(msg);
     }
     pluginTask.setCopyIntoTableColumnNames(copyIntoTableColumnNames.toArray(new String[0]));
     pluginTask.setCopyIntoCSVColumnNumbers(

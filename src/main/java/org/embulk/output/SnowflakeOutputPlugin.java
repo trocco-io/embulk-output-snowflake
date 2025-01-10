@@ -75,6 +75,10 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
     @ConfigDefault("3")
     public int getMaxUploadRetries();
 
+    @Config("max_copy_retries")
+    @ConfigDefault("3")
+    public int getMaxCopyRetries();
+
     @Config("empty_field_as_null")
     @ConfigDefault("true")
     public boolean getEmtpyFieldAsNull();
@@ -321,6 +325,7 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
         pluginTask.getCopyIntoCSVColumnNumbers(),
         false,
         pluginTask.getMaxUploadRetries(),
+        pluginTask.getMaxCopyRetries(),
         pluginTask.getEmtpyFieldAsNull());
   }
 

@@ -425,10 +425,10 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
       try {
         uploadFuture.get();
 
-        SnowflakeOutputConnection con = (SnowflakeOutputConnection) connector.connect(true);
         int retries = 0;
         while (true) {
-          try {
+          try (SnowflakeOutputConnection con =
+              (SnowflakeOutputConnection) connector.connect(true)) {
             logger.info("Running COPY from file {}", snowflakeStageFileName);
 
             long startTime = System.currentTimeMillis();
@@ -461,8 +461,6 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
                 String.format(
                     "Copy error %s file %s retries: %d", e, snowflakeStageFileName, retries));
             Thread.sleep(retries * retries * 1000);
-          } finally {
-            con.close();
           }
         }
       } finally {

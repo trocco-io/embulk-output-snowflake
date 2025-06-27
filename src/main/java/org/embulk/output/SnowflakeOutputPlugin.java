@@ -98,18 +98,23 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
     public boolean getUploadJdbcLogToS3();
 
     @Config("s3_bucket")
+    @ConfigDefault("null")
     public Optional<String> getS3Bucket();
 
     @Config("s3_prefix")
+    @ConfigDefault("null")
     public Optional<String> getS3Prefix();
 
     @Config("s3_region")
+    @ConfigDefault("null")
     public Optional<String> getS3Region();
 
     @Config("s3_access_key_id")
+    @ConfigDefault("null")
     public Optional<String> getS3AccessKeyId();
 
     @Config("s3_secret_access_key")
+    @ConfigDefault("null")
     public Optional<String> getS3SecretAccessKey();
 
     public void setCopyIntoTableColumnNames(String[] columnNames);

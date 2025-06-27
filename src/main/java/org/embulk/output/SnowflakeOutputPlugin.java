@@ -98,24 +98,19 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
     public boolean getUploadJdbcLogToS3();
 
     @Config("s3_bucket")
-    @ConfigDefault("null")
-    public String getS3Bucket();
+    public Optional<String> getS3Bucket();
 
     @Config("s3_prefix")
-    @ConfigDefault("null")
-    public String getS3Prefix();
+    public Optional<String> getS3Prefix();
 
     @Config("s3_region")
-    @ConfigDefault("null")
-    public String getS3Region();
+    public Optional<String> getS3Region();
 
     @Config("s3_access_key_id")
-    @ConfigDefault("null")
-    public String getS3AccessKeyId();
+    public Optional<String> getS3AccessKeyId();
 
     @Config("s3_secret_access_key")
-    @ConfigDefault("null")
-    public String getS3SecretAccessKey();
+    public Optional<String> getS3SecretAccessKey();
 
     public void setCopyIntoTableColumnNames(String[] columnNames);
 
@@ -260,15 +255,15 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
         if (message != null
             && message.contains(ENCOUNTERED_COMMUNICATION_ERROR_MESSAGE)
             && t.getUploadJdbcLogToS3() == true) {
-          final String s3Bucket = t.getS3Bucket();
-          final String s3Prefix = t.getS3Prefix();
-          final String s3Region = t.getS3Region();
-          final String s3AccessKeyId = t.getS3AccessKeyId();
-          final String s3SecretAccessKey = t.getS3SecretAccessKey();
-          if (s3Bucket == null || s3Prefix == null || s3Region == null) {
+          final Optional<String> s3Bucket = t.getS3Bucket();
+          final Optional<String> s3Prefix = t.getS3Prefix();
+          final Optional<String> s3Region = t.getS3Region();
+          final Optional<String> s3AccessKeyId = t.getS3AccessKeyId();
+          final Optional<String> s3SecretAccessKey = t.getS3SecretAccessKey();
+          if (!s3Bucket.isPresent() || !s3Prefix.isPresent() || !s3Region.isPresent()) {
             logger.warn("s3_bucket, s3_prefix, and s3_region must be set when upload_jdbc_log_to_s3 is true");
           } else {
-            try (JdbcLogUploader jdbcLogUploader = new JdbcLogUploader(s3Bucket, s3Prefix, s3Region, s3AccessKeyId, s3SecretAccessKey)) {
+            try (JdbcLogUploader jdbcLogUploader = new JdbcLogUploader(s3Bucket.get(), s3Prefix.get(), s3Region.get(), s3AccessKeyId.orElse(null), s3SecretAccessKey.orElse(null))) {
               // snowflake_jdbc*.log で最新のファイルを探してアップロード
               String tmpDir = System.getProperty("java.io.tmpdir", "/tmp");
               File logDir = new File(tmpDir);

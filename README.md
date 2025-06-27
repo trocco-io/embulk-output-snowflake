@@ -34,8 +34,8 @@ Snowflake output plugin for Embulk loads records to Snowflake.
 - **s3_bucket**: S3 bucket name for JDBC log upload (string, required when upload_jdbc_log_to_s3 is true)
 - **s3_prefix**: S3 key prefix for JDBC log upload (string, required when upload_jdbc_log_to_s3 is true)
 - **s3_region**: AWS region for S3 bucket (string, required when upload_jdbc_log_to_s3 is true)
-- **s3_access_key_id**: AWS access key ID for S3 access (string, optional - uses IAM role if not specified)
-- **s3_secret_access_key**: AWS secret access key for S3 access (string, optional - uses IAM role if not specified)
+- **s3_access_key_id**: AWS access key ID for S3 access (string, optional - uses default AWS credentials provider chain if not specified)
+- **s3_secret_access_key**: AWS secret access key for S3 access (string, optional - uses default AWS credentials provider chain if not specified)
 - **default_timezone**: If input column type (embulk type) is timestamp, this plugin needs to format the timestamp into a SQL string. This default_timezone option is used to control the timezone. You can overwrite timezone for each columns using column_options option. (string, default: `UTC`)
 - **column_options**: advanced: a key-value pairs where key is a column name and value is options for the column.
   - **type**: type of a column when this plugin creates new tables (e.g. `VARCHAR(255)`, `INTEGER NOT NULL UNIQUE`). This used when this plugin creates intermediate tables (insert, truncate_insert and merge modes), when it creates the target table (insert_direct and replace modes), and when it creates nonexistent target table automatically. (string, default: depends on input column type. `BIGINT` if input column type is long, `BOOLEAN` if boolean, `DOUBLE PRECISION` if double, `CLOB` if string, `TIMESTAMP` if timestamp)

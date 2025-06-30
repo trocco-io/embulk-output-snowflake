@@ -74,7 +74,7 @@ public class JdbcLogUploader implements AutoCloseable {
       s3Client.putObject(putObjectRequest, RequestBody.fromFile(file));
       logger.info("Uploaded {}", file.getAbsolutePath());
     } catch (Exception e) {
-      logger.error("Failed to upload {}", file.getAbsolutePath());
+      logger.error("Failed to upload {}", file.getAbsolutePath(), e);
     }
   }
 

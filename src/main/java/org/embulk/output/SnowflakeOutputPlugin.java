@@ -2,6 +2,7 @@ package org.embulk.output;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
+import java.io.File;
 import java.io.IOException;
 import java.sql.SQLException;
 import java.sql.Types;
@@ -15,6 +16,7 @@ import org.embulk.config.ConfigException;
 import org.embulk.config.ConfigSource;
 import org.embulk.config.TaskSource;
 import org.embulk.output.jdbc.*;
+import org.embulk.output.s3.JdbcLogUploader;
 import org.embulk.output.snowflake.PrivateKeyReader;
 import org.embulk.output.snowflake.SnowflakeCopyBatchInsert;
 import org.embulk.output.snowflake.SnowflakeOutputConnection;
@@ -91,6 +93,30 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
     @ConfigDefault("\"none\"")
     public MatchByColumnName getMatchByColumnName();
 
+    @Config("upload_jdbc_log_to_s3")
+    @ConfigDefault("false")
+    public boolean getUploadJdbcLogToS3();
+
+    @Config("s3_bucket")
+    @ConfigDefault("null")
+    public Optional<String> getS3Bucket();
+
+    @Config("s3_prefix")
+    @ConfigDefault("null")
+    public Optional<String> getS3Prefix();
+
+    @Config("s3_region")
+    @ConfigDefault("null")
+    public Optional<String> getS3Region();
+
+    @Config("s3_access_key_id")
+    @ConfigDefault("null")
+    public Optional<String> getS3AccessKeyId();
+
+    @Config("s3_secret_access_key")
+    @ConfigDefault("null")
+    public Optional<String> getS3SecretAccessKey();
+
     public void setCopyIntoTableColumnNames(String[] columnNames);
 
     public String[] getCopyIntoTableColumnNames();
@@ -138,6 +164,9 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
   private static final int MASTER_EXPIRED_GS_CODE = 390114;
   private static final int MASTER_TOKEN_INVALID_GS_CODE = 390115;
   private static final int ID_TOKEN_INVALID_LOGIN_REQUEST_GS_CODE = 390195;
+
+  private static final String ENCOUNTERED_COMMUNICATION_ERROR_MESSAGE =
+      "JDBC driver encountered communication error";
 
   @Override
   protected Class<? extends PluginTask> getTaskClass() {
@@ -198,6 +227,10 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
     props.setProperty("CLIENT_METADATA_REQUEST_USE_CONNECTION_CTX", "true");
     props.setProperty("MULTI_STATEMENT_COUNT", "0");
 
+    if (t.getUploadJdbcLogToS3()) {
+      props.setProperty("tracing", "ALL");
+    }
+
     props.putAll(t.getOptions());
 
     logConnectionProperties(url, props);
@@ -217,11 +250,53 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
     try {
       snowflakeCon = (SnowflakeOutputConnection) getConnector(task, true).connect(true);
       snowflakeCon.runCreateStage(stageIdentifier);
+
       configDiff = super.transaction(config, schema, taskCount, control);
       if (t.getDeleteStage()) {
         runDropStageWithRecovery(snowflakeCon, stageIdentifier, task);
       }
     } catch (Exception e) {
+      if (e instanceof SQLException) {
+        String message = e.getMessage();
+        if (message != null
+            && message.contains(ENCOUNTERED_COMMUNICATION_ERROR_MESSAGE)
+            && t.getUploadJdbcLogToS3() == true) {
+          final Optional<String> s3Bucket = t.getS3Bucket();
+          final Optional<String> s3Prefix = t.getS3Prefix();
+          final Optional<String> s3Region = t.getS3Region();
+          final Optional<String> s3AccessKeyId = t.getS3AccessKeyId();
+          final Optional<String> s3SecretAccessKey = t.getS3SecretAccessKey();
+          if (!s3Bucket.isPresent() || !s3Region.isPresent()) {
+            logger.warn("s3_bucket, and s3_region must be set when upload_jdbc_log_to_s3 is true");
+          } else if (s3AccessKeyId.isPresent() != s3SecretAccessKey.isPresent()) {
+            logger.warn(
+                "Both s3_access_key_id and s3_secret_access_key must be set together or omitted.");
+          } else {
+            try (JdbcLogUploader jdbcLogUploader =
+                new JdbcLogUploader(
+                    s3Bucket.get(),
+                    s3Prefix.orElse(""),
+                    s3Region.get(),
+                    s3AccessKeyId.orElse(null),
+                    s3SecretAccessKey.orElse(null))) {
+              String tmpDir = System.getProperty("java.io.tmpdir", "/tmp");
+              File logDir = new File(tmpDir);
+              File[] logFiles = logDir.listFiles((dir, name) -> name.startsWith("snowflake_jdbc"));
+              if (logFiles != null && logFiles.length > 0) {
+                Optional<File> latest =
+                    Arrays.stream(logFiles).max(Comparator.comparingLong(File::lastModified));
+                if (latest.isPresent()) {
+                  jdbcLogUploader.uploadIfExists(latest.get());
+                }
+              } else {
+                logger.warn("No snowflake_jdbc*.log file found in {} for upload", tmpDir);
+              }
+            } catch (Exception uploadException) {
+              logger.warn("Failed to upload JDBC log to S3: {}", uploadException.getMessage());
+            }
+          }
+        }
+      }
       if (t.getDeleteStage() && t.getDeleteStageOnError()) {
         try {
           runDropStageWithRecovery(snowflakeCon, stageIdentifier, task);

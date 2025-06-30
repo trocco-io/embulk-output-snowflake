@@ -52,6 +52,37 @@ dependencies {
 
     compile "org.embulk:embulk-output-jdbc:0.10.2"
     compile "net.snowflake:snowflake-jdbc:3.13.26"
+
+    compile platform("software.amazon.awssdk:bom:2.25.20")
+
+    compile("software.amazon.awssdk:s3") {
+        exclude group: "com.fasterxml.jackson.core", module: "jackson-annotations"
+        exclude group: "com.fasterxml.jackson.core", module: "jackson-core"
+        exclude group: "com.fasterxml.jackson.core", module: "jackson-databind"
+        exclude group: "joda-time", module: "joda-time"
+        exclude group: "commons-logging", module: "commons-logging"
+        exclude group: "org.slf4j", module: "slf4j-api"
+    }
+
+    compile("software.amazon.awssdk:regions") {
+        exclude group: "com.fasterxml.jackson.core", module: "jackson-annotations"
+        exclude group: "com.fasterxml.jackson.core", module: "jackson-core"
+        exclude group: "com.fasterxml.jackson.core", module: "jackson-databind"
+        exclude group: "joda-time", module: "joda-time"
+        exclude group: "commons-logging", module: "commons-logging"
+        exclude group: "org.slf4j", module: "slf4j-api"
+    }
+
+    compile("software.amazon.awssdk:auth") {
+        exclude group: "com.fasterxml.jackson.core", module: "jackson-annotations"
+        exclude group: "com.fasterxml.jackson.core", module: "jackson-core"
+        exclude group: "com.fasterxml.jackson.core", module: "jackson-databind"
+        exclude group: "joda-time", module: "joda-time"
+        exclude group: "commons-logging", module: "commons-logging"
+        exclude group: "org.slf4j", module: "slf4j-api"
+    }
+
+    compile "commons-logging:commons-logging:1.2"
 }
 embulkPlugin {
     mainClass = "org.embulk.output.SnowflakeOutputPlugin"

@@ -268,6 +268,8 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
           final Optional<String> s3SecretAccessKey = t.getS3SecretAccessKey();
           if (!s3Bucket.isPresent() || !s3Region.isPresent()) {
             logger.warn("s3_bucket, and s3_region must be set when upload_jdbc_log_to_s3 is true");
+          } else if (s3AccessKeyId.isPresent() != s3SecretAccessKey.isPresent()) {
+            logger.warn("Both s3_access_key_id and s3_secret_access_key must be set together or omitted.");
           } else {
             try (JdbcLogUploader jdbcLogUploader =
                 new JdbcLogUploader(

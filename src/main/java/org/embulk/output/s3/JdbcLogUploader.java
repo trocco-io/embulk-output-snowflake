@@ -55,7 +55,7 @@ public class JdbcLogUploader implements AutoCloseable {
     String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
     String originalFileName = file.getName();
     String fileNameWithTimestamp;
-    
+
     // Insert timestamp before file extension
     int lastDotIndex = originalFileName.lastIndexOf('.');
     if (lastDotIndex > 0) {
@@ -65,7 +65,7 @@ public class JdbcLogUploader implements AutoCloseable {
     } else {
       fileNameWithTimestamp = originalFileName + "_" + timestamp;
     }
-    
+
     String key = prefix.isEmpty() ? fileNameWithTimestamp : prefix + "/" + fileNameWithTimestamp;
     try {
       PutObjectRequest putObjectRequest =

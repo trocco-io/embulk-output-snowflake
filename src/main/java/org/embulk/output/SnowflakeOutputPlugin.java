@@ -278,9 +278,7 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
                     s3SecretAccessKey.orElse(null))) {
               String tmpDir = System.getProperty("java.io.tmpdir", "/tmp");
               File logDir = new File(tmpDir);
-              File[] logFiles =
-                  logDir.listFiles(
-                      (dir, name) -> name.startsWith("snowflake_jdbc"));
+              File[] logFiles = logDir.listFiles((dir, name) -> name.startsWith("snowflake_jdbc"));
               if (logFiles != null && logFiles.length > 0) {
                 Optional<File> latest =
                     Arrays.stream(logFiles).max(Comparator.comparingLong(File::lastModified));

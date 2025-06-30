@@ -250,6 +250,7 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
     try {
       snowflakeCon = (SnowflakeOutputConnection) getConnector(task, true).connect(true);
       snowflakeCon.runCreateStage(stageIdentifier);
+
       configDiff = super.transaction(config, schema, taskCount, control);
       if (t.getDeleteStage()) {
         runDropStageWithRecovery(snowflakeCon, stageIdentifier, task);
@@ -265,18 +266,22 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
           final Optional<String> s3Region = t.getS3Region();
           final Optional<String> s3AccessKeyId = t.getS3AccessKeyId();
           final Optional<String> s3SecretAccessKey = t.getS3SecretAccessKey();
-          if (!s3Bucket.isPresent() || !s3Prefix.isPresent() || !s3Region.isPresent()) {
-            logger.warn("s3_bucket, s3_prefix, and s3_region must be set when upload_jdbc_log_to_s3 is true");
+          if (!s3Bucket.isPresent() || !s3Region.isPresent()) {
+            logger.warn("s3_bucket, and s3_region must be set when upload_jdbc_log_to_s3 is true");
           } else {
-            try (JdbcLogUploader jdbcLogUploader = new JdbcLogUploader(s3Bucket.get(), s3Prefix.get(), s3Region.get(), s3AccessKeyId.orElse(null), s3SecretAccessKey.orElse(null))) {
-              // snowflake_jdbc*.log で最新のファイルを探してアップロード
+            try (JdbcLogUploader jdbcLogUploader =
+                new JdbcLogUploader(
+                    s3Bucket.get(),
+                    s3Prefix.orElse(""),
+                    s3Region.get(),
+                    s3AccessKeyId.orElse(null),
+                    s3SecretAccessKey.orElse(null))) {
               String tmpDir = System.getProperty("java.io.tmpdir", "/tmp");
               File logDir = new File(tmpDir);
               File[] logFiles =
                   logDir.listFiles(
-                      (dir, name) -> name.startsWith("snowflake_jdbc") && name.endsWith(".log"));
+                      (dir, name) -> name.startsWith("snowflake_jdbc"));
               if (logFiles != null && logFiles.length > 0) {
-                // 最終更新日時が新しいファイルを選択
                 Optional<File> latest =
                     Arrays.stream(logFiles).max(Comparator.comparingLong(File::lastModified));
                 if (latest.isPresent()) {

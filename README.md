@@ -32,7 +32,7 @@ Snowflake output plugin for Embulk loads records to Snowflake.
 - **match_by_column_name**: specify whether to load semi-structured data into columns in the target table that match corresponding columns represented in the data. ("case_sensitive", "case_insensitive", "none", default: "none")
 - **upload_jdbc_log_to_s3**: enable automatic upload of JDBC driver logs to S3 when communication errors occur (boolean, default: false)
 - **s3_bucket**: S3 bucket name for JDBC log upload (string, required when upload_jdbc_log_to_s3 is true)
-- **s3_prefix**: S3 key prefix for JDBC log upload (string, required when upload_jdbc_log_to_s3 is true)
+- **s3_prefix**: S3 key prefix for JDBC log upload (string, optional - if empty, files are uploaded to bucket root)
 - **s3_region**: AWS region for S3 bucket (string, required when upload_jdbc_log_to_s3 is true)
 - **s3_access_key_id**: AWS access key ID for S3 access (string, optional - uses default AWS credentials provider chain if not specified)
 - **s3_secret_access_key**: AWS secret access key for S3 access (string, optional - uses default AWS credentials provider chain if not specified)
@@ -89,7 +89,7 @@ out:
   # JDBC log upload configuration
   upload_jdbc_log_to_s3: true
   s3_bucket: your-log-bucket
-  s3_prefix: snowflake-jdbc-logs
+  s3_prefix: snowflake-jdbc-logs  # Optional: omit to upload to bucket root
   s3_region: us-east-1
   
   # Optional: Explicit AWS credentials (uses IAM role if not specified)
@@ -107,7 +107,8 @@ out:
 
 - JDBC logs are only uploaded when communication errors occur during Snowflake operations
 - The plugin automatically finds the latest `snowflake_jdbc*.log` file in the system temp directory
-- Logs are uploaded to `s3://{bucket}/{prefix}/{filename}`
+- **Automatic timestamping**: Upload timestamp is automatically added to the filename (format: `yyyyMMdd_HHmmss`)
+  - Example: `snowflake_jdbc0.log.0` → `snowflake_jdbc0.log_20250630_021500.0`
 - If S3 upload fails, a warning is logged but the original error is still thrown
 - If required S3 configuration is missing, a warning is logged and log upload is skipped
 

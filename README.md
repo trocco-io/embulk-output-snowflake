@@ -25,6 +25,7 @@ Snowflake output plugin for Embulk loads records to Snowflake.
 - **max_retry_wait**: upper limit of retry wait, which will be doubled at every retry (integer, default: 1800000 (30 minutes))
 - **max_upload_retries**: maximum number of retries for file upload to Snowflake (integer, default: 3).
 - **max_copy_retries**: maximum number of retries for COPY operations in Snowflake (integer, default: 3). Retries occur when transient errors such as communication failures happen during the COPY process.
+- **jdbc_tracing**: JDBC driver logging level. This controls the verbosity of Snowflake JDBC driver logs. Valid values are: OFF, SEVERE, WARNING, INFO, CONFIG, FINE, FINER, FINEST, ALL (string, default: "INFO").
 - **mode**: "insert", "insert_direct", "truncate_insert", "replace" or "merge". See below. (string, required)
 - **merge_keys**: key column names for merging records in merge mode (string array, required in merge mode if table doesn't have primary key)
 - **merge_rule**: list of column assignments for updating existing records used in merge mode, for example `"foo" = T."foo" + S."foo"` (`T` means target table and `S` means source table). (string array, default: always overwrites with new values)

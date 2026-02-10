@@ -2,6 +2,8 @@
 
 Snowflake output plugin for Embulk loads records to Snowflake.
 
+<!-- CI test -->
+
 ## Overview
 
 * **Plugin type**: output

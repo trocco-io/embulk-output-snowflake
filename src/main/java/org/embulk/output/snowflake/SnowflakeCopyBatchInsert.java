@@ -369,33 +369,35 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
       try {
         long startTime = System.currentTimeMillis();
         // put file to snowflake internal storage
-        SnowflakeOutputConnection con = (SnowflakeOutputConnection) connector.connect(true);
-
-        while (true) {
-          try {
-            logger.info(
-                String.format(
-                    "Uploading file id %s to Snowflake (%,d bytes %,d rows)",
-                    snowflakeStageFileName, file.length(), batchRows));
-            FileInputStream fileInputStream = new FileInputStream(file);
-            con.runUploadFile(stageIdentifier, snowflakeStageFileName, fileInputStream);
-            break;
-          } catch (SQLException e) {
-            retries++;
-            if (retries > this.maxUploadRetries) {
-              throw e;
+        try (SnowflakeOutputConnection con =
+            (SnowflakeOutputConnection) connector.connect(true)) {
+          while (true) {
+            try {
+              logger.info(
+                  String.format(
+                      "Uploading file id %s to Snowflake (%,d bytes %,d rows)",
+                      snowflakeStageFileName, file.length(), batchRows));
+              FileInputStream fileInputStream = new FileInputStream(file);
+              con.runUploadFile(stageIdentifier, snowflakeStageFileName, fileInputStream);
+              break;
+            } catch (SQLException e) {
+              retries++;
+              if (retries > this.maxUploadRetries) {
+                throw e;
+              }
+              logger.warn(
+                  String.format(
+                      "Upload error %s file %s retries: %d",
+                      e, snowflakeStageFileName, retries));
+              Thread.sleep(retries * retries * 1000);
             }
-            logger.warn(
-                String.format(
-                    "Upload error %s file %s retries: %d", e, snowflakeStageFileName, retries));
-            Thread.sleep(retries * retries * 1000);
           }
+
+          double seconds = (System.currentTimeMillis() - startTime) / 1000.0;
+
+          logger.info(
+              String.format("Uploaded file %s (%.2f seconds)", snowflakeStageFileName, seconds));
         }
-
-        double seconds = (System.currentTimeMillis() - startTime) / 1000.0;
-
-        logger.info(
-            String.format("Uploaded file %s (%.2f seconds)", snowflakeStageFileName, seconds));
       } finally {
         file.delete();
       }

@@ -253,6 +253,119 @@ public class SnowflakeOutputConnection extends JdbcOutputConnection {
     return sb.toString();
   }
 
+  public void runBatchCopy(
+      TableIdentifier tableIdentifier,
+      StageIdentifier stageIdentifier,
+      List<String> fileNames,
+      String[] tableColumnNames,
+      int[] csvColumnNumbers,
+      String delimiterString,
+      boolean emptyFieldAsNull)
+      throws SQLException {
+    String sql =
+        tableColumnNames != null && tableColumnNames.length > 0
+            ? buildBatchCopySQL(
+                tableIdentifier,
+                stageIdentifier,
+                fileNames,
+                tableColumnNames,
+                csvColumnNumbers,
+                delimiterString,
+                emptyFieldAsNull)
+            : buildBatchCopySQL(
+                tableIdentifier, stageIdentifier, fileNames, delimiterString, emptyFieldAsNull);
+
+    runUpdate(sql);
+  }
+
+  protected String buildBatchCopySQL(
+      TableIdentifier tableIdentifier,
+      StageIdentifier stageIdentifier,
+      List<String> fileNames,
+      String delimiterString,
+      boolean emptyFieldAsNull) {
+    StringBuilder sb = new StringBuilder();
+    sb.append("COPY INTO ");
+    quoteTableIdentifier(sb, tableIdentifier);
+    sb.append(" FROM ");
+    quoteInternalStorageBasePath(sb, stageIdentifier);
+    sb.append(" ");
+    buildFilesClause(sb, fileNames);
+    sb.append(" FILE_FORMAT = ( TYPE = CSV FIELD_DELIMITER = '");
+    sb.append(delimiterString);
+    sb.append("'");
+    if (!emptyFieldAsNull) {
+      sb.append(" EMPTY_FIELD_AS_NULL = FALSE");
+    }
+    sb.append(" );");
+    return sb.toString();
+  }
+
+  protected String buildBatchCopySQL(
+      TableIdentifier tableIdentifier,
+      StageIdentifier stageIdentifier,
+      List<String> fileNames,
+      String[] tableColumnNames,
+      int[] csvColumnNumbers,
+      String delimiterString,
+      boolean emptyFieldAsNull) {
+    StringBuilder sb = new StringBuilder();
+    sb.append("COPY INTO ");
+    quoteTableIdentifier(sb, tableIdentifier);
+    sb.append(" (");
+    for (int i = 0; i < tableColumnNames.length; i++) {
+      if (i != 0) {
+        sb.append(", ");
+      }
+      String column = quoteIdentifierString(tableColumnNames[i]);
+      sb.append(column);
+    }
+    sb.append(" ) FROM ( SELECT ");
+    for (int i = 0; i < csvColumnNumbers.length; i++) {
+      if (i != 0) {
+        sb.append(", ");
+      }
+      sb.append("t.$");
+      sb.append(csvColumnNumbers[i]);
+    }
+    sb.append(" from ");
+    quoteInternalStorageBasePath(sb, stageIdentifier);
+    sb.append(" t ) ");
+    buildFilesClause(sb, fileNames);
+    sb.append(" FILE_FORMAT = ( TYPE = CSV FIELD_DELIMITER = '");
+    sb.append(delimiterString);
+    sb.append("'");
+    if (!emptyFieldAsNull) {
+      sb.append(" EMPTY_FIELD_AS_NULL = FALSE");
+    }
+    sb.append(" );");
+    return sb.toString();
+  }
+
+  protected void quoteInternalStorageBasePath(
+      StringBuilder sb, StageIdentifier stageIdentifier) {
+    sb.append("@");
+    quoteStageIdentifier(sb, stageIdentifier);
+    if (stageIdentifier.getDestPrefix().isPresent()) {
+      sb.append("/");
+      sb.append(stageIdentifier.getDestPrefix().get());
+    }
+    sb.append("/");
+  }
+
+  protected void buildFilesClause(StringBuilder sb, List<String> fileNames) {
+    sb.append("FILES = (");
+    for (int i = 0; i < fileNames.size(); i++) {
+      if (i != 0) {
+        sb.append(", ");
+      }
+      sb.append("'");
+      sb.append(fileNames.get(i));
+      sb.append("'");
+    }
+    sb.append(")");
+  }
+
   protected String buildDeleteStageFileSQL(
       StageIdentifier stageIdentifier, String snowflakeStageFileName) {
     StringBuilder sb = new StringBuilder();

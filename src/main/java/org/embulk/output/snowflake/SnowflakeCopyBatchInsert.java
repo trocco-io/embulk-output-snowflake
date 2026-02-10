@@ -341,8 +341,7 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
   private void runBatchCopyWithRetry(List<String> fileNames) throws SQLException {
     int retries = 0;
     while (true) {
-      try (SnowflakeOutputConnection con =
-          (SnowflakeOutputConnection) connector.connect(true)) {
+      try (SnowflakeOutputConnection con = (SnowflakeOutputConnection) connector.connect(true)) {
         logger.info("Running batch COPY INTO for {} files", fileNames.size());
 
         long startTime = System.currentTimeMillis();
@@ -371,8 +370,7 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
         if (retries > maxCopyRetries) {
           throw e;
         }
-        logger.warn(
-            String.format("Batch COPY error %s retries: %d", e, retries));
+        logger.warn(String.format("Batch COPY error %s retries: %d", e, retries));
         try {
           Thread.sleep(retries * retries * 1000);
         } catch (InterruptedException ie) {
@@ -437,8 +435,7 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
       try {
         long startTime = System.currentTimeMillis();
         // put file to snowflake internal storage
-        try (SnowflakeOutputConnection con =
-            (SnowflakeOutputConnection) connector.connect(true)) {
+        try (SnowflakeOutputConnection con = (SnowflakeOutputConnection) connector.connect(true)) {
           while (true) {
             try {
               logger.info(
@@ -455,8 +452,7 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
               }
               logger.warn(
                   String.format(
-                      "Upload error %s file %s retries: %d",
-                      e, snowflakeStageFileName, retries));
+                      "Upload error %s file %s retries: %d", e, snowflakeStageFileName, retries));
               Thread.sleep(retries * retries * 1000);
             }
           }
@@ -473,5 +469,4 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
       return null;
     }
   }
-
 }

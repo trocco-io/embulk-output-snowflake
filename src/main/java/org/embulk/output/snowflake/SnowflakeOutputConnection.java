@@ -342,8 +342,7 @@ public class SnowflakeOutputConnection extends JdbcOutputConnection {
     return sb.toString();
   }
 
-  protected void quoteInternalStorageBasePath(
-      StringBuilder sb, StageIdentifier stageIdentifier) {
+  protected void quoteInternalStorageBasePath(StringBuilder sb, StageIdentifier stageIdentifier) {
     sb.append("@");
     quoteStageIdentifier(sb, stageIdentifier);
     if (stageIdentifier.getDestPrefix().isPresent()) {

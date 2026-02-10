@@ -7,6 +7,7 @@ import static org.junit.Assert.assertTrue;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.security.PrivateKey;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
@@ -82,9 +83,8 @@ public class TestSnowflakeOutputPlugin {
       Optional.ofNullable(System.getenv("EMBULK_OUTPUT_SNOWFLAKE_TEST_HOST")).orElse("localhost");
   private static final String TEST_SNOWFLAKE_USER =
       Optional.ofNullable(System.getenv("EMBULK_OUTPUT_SNOWFLAKE_TEST_USER")).orElse("user");
-  private static final String TEST_SNOWFLAKE_PASSWORD =
-      Optional.ofNullable(System.getenv("EMBULK_OUTPUT_SNOWFLAKE_TEST_PASSWORD"))
-          .orElse("password");
+  private static final String TEST_SNOWFLAKE_PRIVATE_KEY =
+      System.getenv("EMBULK_OUTPUT_SNOWFLAKE_TEST_PRIVATE_KEY");
   private static final String TEST_SNOWFLAKE_WAREHOUSE =
       Optional.ofNullable(System.getenv("EMBULK_OUTPUT_SNOWFLAKE_TEST_WAREHOUSE"))
           .orElse("warehouse");
@@ -98,12 +98,21 @@ public class TestSnowflakeOutputPlugin {
     Properties props = new Properties();
     props.setProperty("host", TEST_SNOWFLAKE_HOST);
     props.setProperty("user", TEST_SNOWFLAKE_USER);
-    props.setProperty("password", TEST_SNOWFLAKE_PASSWORD);
     props.setProperty("warehouse", TEST_SNOWFLAKE_WAREHOUSE);
     props.setProperty("db", TEST_SNOWFLAKE_DB);
     props.setProperty("schema", TEST_SNOWFLAKE_SCHEMA);
     props.setProperty("MULTI_STATEMENT_COUNT", "0");
+    try {
+      PrivateKey privateKey = PrivateKeyReader.get(TEST_SNOWFLAKE_PRIVATE_KEY, "");
+      props.put("privateKey", privateKey);
+    } catch (Exception e) {
+      throw new RuntimeException("Failed to parse private key for test", e);
+    }
     TEST_PROPERTIES = props;
+  }
+
+  private ConfigSource setAuthConfig(ConfigSource config) {
+    return config.set("user", TEST_SNOWFLAKE_USER).set("privateKey", TEST_SNOWFLAKE_PRIVATE_KEY);
   }
 
   private interface ThrowableConsumer<T> extends Consumer<T> {
@@ -265,14 +274,13 @@ public class TestSnowflakeOutputPlugin {
         CONFIG_MAPPER_FACTORY
             .newConfigSource()
             .set("type", "snowflake")
-            .set("user", TEST_SNOWFLAKE_USER)
-            .set("password", TEST_SNOWFLAKE_PASSWORD)
             .set("host", TEST_SNOWFLAKE_HOST)
             .set("database", TEST_SNOWFLAKE_DB)
             .set("warehouse", TEST_SNOWFLAKE_WAREHOUSE)
             .set("schema", TEST_SNOWFLAKE_SCHEMA)
             .set("mode", "replace")
             .set("table", tableName);
+    setAuthConfig(config);
     embulk.runOutput(config, in.toPath());
 
     String fullTableName =
@@ -308,14 +316,13 @@ public class TestSnowflakeOutputPlugin {
         CONFIG_MAPPER_FACTORY
             .newConfigSource()
             .set("type", "snowflake")
-            .set("user", TEST_SNOWFLAKE_USER)
-            .set("password", TEST_SNOWFLAKE_PASSWORD)
             .set("host", TEST_SNOWFLAKE_HOST)
             .set("database", TEST_SNOWFLAKE_DB)
             .set("warehouse", TEST_SNOWFLAKE_WAREHOUSE)
             .set("schema", TEST_SNOWFLAKE_SCHEMA)
             .set("mode", "replace")
             .set("table", tableName);
+    setAuthConfig(config);
     embulk.runOutput(config, in.toPath());
 
     String fullTableName =
@@ -351,14 +358,13 @@ public class TestSnowflakeOutputPlugin {
         CONFIG_MAPPER_FACTORY
             .newConfigSource()
             .set("type", "snowflake")
-            .set("user", TEST_SNOWFLAKE_USER)
-            .set("password", TEST_SNOWFLAKE_PASSWORD)
             .set("host", TEST_SNOWFLAKE_HOST)
             .set("database", TEST_SNOWFLAKE_DB)
             .set("warehouse", TEST_SNOWFLAKE_WAREHOUSE)
             .set("schema", TEST_SNOWFLAKE_SCHEMA)
             .set("mode", "replace")
             .set("table", tableName);
+    setAuthConfig(config);
     embulk.runOutput(config, in.toPath());
 
     String fullTableName =
@@ -394,14 +400,13 @@ public class TestSnowflakeOutputPlugin {
         CONFIG_MAPPER_FACTORY
             .newConfigSource()
             .set("type", "snowflake")
-            .set("user", TEST_SNOWFLAKE_USER)
-            .set("password", TEST_SNOWFLAKE_PASSWORD)
             .set("host", TEST_SNOWFLAKE_HOST)
             .set("database", TEST_SNOWFLAKE_DB)
             .set("warehouse", TEST_SNOWFLAKE_WAREHOUSE)
             .set("schema", TEST_SNOWFLAKE_SCHEMA)
             .set("mode", "replace")
             .set("table", tableName);
+    setAuthConfig(config);
     embulk.runOutput(config, in.toPath());
 
     String fullTableName =
@@ -446,8 +451,6 @@ public class TestSnowflakeOutputPlugin {
         CONFIG_MAPPER_FACTORY
             .newConfigSource()
             .set("type", "snowflake")
-            .set("user", TEST_SNOWFLAKE_USER)
-            .set("password", TEST_SNOWFLAKE_PASSWORD)
             .set("host", TEST_SNOWFLAKE_HOST)
             .set("database", TEST_SNOWFLAKE_DB)
             .set("warehouse", TEST_SNOWFLAKE_WAREHOUSE)
@@ -459,6 +462,7 @@ public class TestSnowflakeOutputPlugin {
                 String.format(
                     "insert into \"%s\" select * from \"%s\"; drop table \"%s\";",
                     targetTableName, temporaryTableName, temporaryTableName));
+    setAuthConfig(config);
     embulk.runOutput(config, in.toPath());
 
     runQuery(
@@ -503,14 +507,13 @@ public class TestSnowflakeOutputPlugin {
         CONFIG_MAPPER_FACTORY
             .newConfigSource()
             .set("type", "snowflake")
-            .set("user", TEST_SNOWFLAKE_USER)
-            .set("password", TEST_SNOWFLAKE_PASSWORD)
             .set("host", TEST_SNOWFLAKE_HOST)
             .set("database", TEST_SNOWFLAKE_DB)
             .set("warehouse", TEST_SNOWFLAKE_WAREHOUSE)
             .set("schema", TEST_SNOWFLAKE_SCHEMA)
             .set("mode", "insert")
             .set("table", tableName);
+    setAuthConfig(config);
     embulk.runOutput(config, in.toPath());
 
     runQuery(
@@ -545,8 +548,6 @@ public class TestSnowflakeOutputPlugin {
         CONFIG_MAPPER_FACTORY
             .newConfigSource()
             .set("type", "snowflake")
-            .set("user", TEST_SNOWFLAKE_USER)
-            .set("password", TEST_SNOWFLAKE_PASSWORD)
             .set("host", TEST_SNOWFLAKE_HOST)
             .set("database", TEST_SNOWFLAKE_DB)
             .set("warehouse", TEST_SNOWFLAKE_WAREHOUSE)
@@ -554,6 +555,7 @@ public class TestSnowflakeOutputPlugin {
             .set("mode", "merge")
             .set("merge_keys", new ArrayList<String>(Arrays.asList("c0", "c1")))
             .set("table", targetTableName);
+    setAuthConfig(config);
     embulk.runOutput(config, in.toPath());
 
     runQuery(
@@ -599,8 +601,6 @@ public class TestSnowflakeOutputPlugin {
         CONFIG_MAPPER_FACTORY
             .newConfigSource()
             .set("type", "snowflake")
-            .set("user", TEST_SNOWFLAKE_USER)
-            .set("password", TEST_SNOWFLAKE_PASSWORD)
             .set("host", TEST_SNOWFLAKE_HOST)
             .set("database", TEST_SNOWFLAKE_DB)
             .set("warehouse", TEST_SNOWFLAKE_WAREHOUSE)
@@ -610,6 +610,7 @@ public class TestSnowflakeOutputPlugin {
             .set(
                 "merge_rule", new ArrayList<String>(Arrays.asList("\"c1\" = T.\"c1\" || S.\"c1\"")))
             .set("table", targetTableName);
+    setAuthConfig(config);
     embulk.runOutput(config, in.toPath());
 
     runQuery(
@@ -656,14 +657,13 @@ public class TestSnowflakeOutputPlugin {
         CONFIG_MAPPER_FACTORY
             .newConfigSource()
             .set("type", "snowflake")
-            .set("user", TEST_SNOWFLAKE_USER)
-            .set("password", TEST_SNOWFLAKE_PASSWORD)
             .set("host", TEST_SNOWFLAKE_HOST)
             .set("database", TEST_SNOWFLAKE_DB)
             .set("warehouse", TEST_SNOWFLAKE_WAREHOUSE)
             .set("schema", TEST_SNOWFLAKE_SCHEMA)
             .set("mode", "merge")
             .set("table", targetTableName);
+    setAuthConfig(config);
     embulk.runOutput(config, in.toPath());
 
     runQuery(
@@ -721,14 +721,13 @@ public class TestSnowflakeOutputPlugin {
         CONFIG_MAPPER_FACTORY
             .newConfigSource()
             .set("type", "snowflake")
-            .set("user", TEST_SNOWFLAKE_USER)
-            .set("password", TEST_SNOWFLAKE_PASSWORD)
             .set("host", TEST_SNOWFLAKE_HOST)
             .set("database", TEST_SNOWFLAKE_DB)
             .set("warehouse", TEST_SNOWFLAKE_WAREHOUSE)
             .set("schema", TEST_SNOWFLAKE_SCHEMA)
             .set("mode", "insert")
             .set("table", tableName);
+    setAuthConfig(outConfig);
     final ConfigSource execConfig =
         CONFIG_MAPPER_FACTORY.newConfigSource().set("min_output_tasks", 1001);
 

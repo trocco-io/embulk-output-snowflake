@@ -349,7 +349,7 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
     int retries = 0;
     while (true) {
       try (SnowflakeOutputConnection con = (SnowflakeOutputConnection) connector.connect(true)) {
-        logger.info("Running batch COPY INTO for {} files", fileNames.size());
+        logger.info("Running batch COPY INTO for {} files: {}", fileNames.size(), fileNames);
 
         long startTime = System.currentTimeMillis();
         con.runBatchCopy(
@@ -365,7 +365,8 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
 
         logger.info(
             String.format(
-                "Loaded %d files (%.2f seconds for batch COPY)", fileNames.size(), seconds));
+                "Loaded %d files (%.2f seconds for batch COPY): %s",
+                fileNames.size(), seconds, fileNames));
 
         return;
       } catch (SQLException e) {

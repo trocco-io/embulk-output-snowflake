@@ -271,6 +271,13 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
   public void flush() throws IOException, SQLException {
     File file = closeCurrentFile(); // flush buffered data in writer
 
+    if (batchRows == 0) {
+      logger.info("Skipping upload of empty file");
+      file.delete();
+      openNewFile();
+      return;
+    }
+
     String snowflakeStageFileName = "embulk_snowflake_" + SnowflakeUtils.randomString(8);
 
     UploadTask uploadTask =

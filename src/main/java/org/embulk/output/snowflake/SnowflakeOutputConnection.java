@@ -21,31 +21,6 @@ public class SnowflakeOutputConnection extends JdbcOutputConnection {
     super(connection, null);
   }
 
-  public void runCopy(
-      TableIdentifier tableIdentifier,
-      StageIdentifier stageIdentifier,
-      String filename,
-      String[] tableColumnNames,
-      int[] csvColumnNumbers,
-      String delimiterString,
-      boolean emptyFieldAsNull)
-      throws SQLException {
-    String sql =
-        tableColumnNames != null && tableColumnNames.length > 0
-            ? buildCopySQL(
-                tableIdentifier,
-                stageIdentifier,
-                filename,
-                tableColumnNames,
-                csvColumnNumbers,
-                delimiterString,
-                emptyFieldAsNull)
-            : buildCopySQL(
-                tableIdentifier, stageIdentifier, filename, delimiterString, emptyFieldAsNull);
-
-    runUpdate(sql);
-  }
-
   public void runCreateStage(StageIdentifier stageIdentifier) throws SQLException {
     String sql = buildCreateStageSQL(stageIdentifier);
     runUpdate(sql);
@@ -186,71 +161,6 @@ public class SnowflakeOutputConnection extends JdbcOutputConnection {
     sb.append(stageIdentifier.getSchemaName());
     sb.append(".");
     sb.append(stageIdentifier.getStageName());
-  }
-
-  protected String buildCopySQL(
-      TableIdentifier tableIdentifier,
-      StageIdentifier stageIdentifier,
-      String snowflakeStageFileName,
-      String delimiterString,
-      boolean emptyFieldAsNull) {
-    StringBuilder sb = new StringBuilder();
-    sb.append("COPY INTO ");
-    quoteTableIdentifier(sb, tableIdentifier);
-    sb.append(" FROM ");
-    quoteInternalStoragePath(sb, stageIdentifier, snowflakeStageFileName);
-    sb.append(" FILE_FORMAT = ( TYPE = CSV FIELD_DELIMITER = '");
-    sb.append(delimiterString);
-    sb.append("'");
-    if (!emptyFieldAsNull) {
-      sb.append(" EMPTY_FIELD_AS_NULL = FALSE");
-    }
-    sb.append(" );");
-    return sb.toString();
-  }
-
-  protected String buildCopySQL(
-      TableIdentifier tableIdentifier,
-      StageIdentifier stageIdentifier,
-      String snowflakeStageFileName,
-      String[] tableColumnNames,
-      int[] csvColumnNumbers,
-      String delimiterString,
-      boolean emptyFieldAsNull) {
-    // Data load with transformation
-    // Correspondence between CSV column numbers and table column names can be specified.
-    // https://docs.snowflake.com/ja/sql-reference/sql/copy-into-table
-
-    StringBuilder sb = new StringBuilder();
-    sb.append("COPY INTO ");
-    quoteTableIdentifier(sb, tableIdentifier);
-    sb.append(" (");
-    for (int i = 0; i < tableColumnNames.length; i++) {
-      if (i != 0) {
-        sb.append(", ");
-      }
-      String column = quoteIdentifierString(tableColumnNames[i]);
-      sb.append(column);
-    }
-    sb.append(" ) FROM ( SELECT ");
-    for (int i = 0; i < csvColumnNumbers.length; i++) {
-      if (i != 0) {
-        sb.append(", ");
-      }
-      sb.append("t.$");
-      sb.append(csvColumnNumbers[i]);
-    }
-    sb.append(" from ");
-    quoteInternalStoragePath(sb, stageIdentifier, snowflakeStageFileName);
-    sb.append(" t ) ");
-    sb.append(" FILE_FORMAT = ( TYPE = CSV FIELD_DELIMITER = '");
-    sb.append(delimiterString);
-    sb.append("'");
-    if (!emptyFieldAsNull) {
-      sb.append(" EMPTY_FIELD_AS_NULL = FALSE");
-    }
-    sb.append(" );");
-    return sb.toString();
   }
 
   public void runBatchCopy(

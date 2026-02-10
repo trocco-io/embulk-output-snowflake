@@ -336,9 +336,11 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
     }
 
     // Delete stage files if configured
+    // runDeleteStageFile appends ".csv.gz" internally, so strip it from uploadedFileNames
     if (deleteStageFile) {
       for (String fileName : uploadedFileNames) {
-        connection.runDeleteStageFile(stageIdentifier, fileName);
+        String nameWithoutExtension = fileName.replaceFirst("\\.csv\\.gz$", "");
+        connection.runDeleteStageFile(stageIdentifier, nameWithoutExtension);
       }
     }
 

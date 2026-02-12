@@ -29,6 +29,7 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
   // https://docs.snowflake.com/en/sql-reference/sql/copy-into-table
   // "The maximum number of files names that can be specified is 1000."
   private static final int MAX_FILES_PER_COPY = 1000;
+  private static final int MAX_DELETE_RETRIES = 3;
   private final int maxUploadRetries;
   private final int maxCopyRetries;
 
@@ -345,7 +346,7 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
         for (String fileName : uploadedFileNames) {
           String nameWithoutExtension = fileName.replaceFirst("\\.csv\\.gz$", "");
           try {
-            retryWithBackoff(maxCopyRetries, "Delete stage file " + fileName, () -> {
+            retryWithBackoff(MAX_DELETE_RETRIES, "Delete stage file " + fileName, () -> {
               connection.runDeleteStageFile(stageIdentifier, nameWithoutExtension);
               return null;
             });
@@ -401,7 +402,7 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
         }
         logger.warn("{} error (retry {}/{}): {}", operationName, retries, maxRetries, e.getMessage());
         try {
-          Thread.sleep(retries * retries * 1000L);
+          Thread.sleep(retries * retries * 1000);
         } catch (InterruptedException ie) {
           throw new RuntimeException(ie);
         }

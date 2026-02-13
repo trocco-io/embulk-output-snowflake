@@ -346,8 +346,13 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
         for (String fileName : uploadedFileNames) {
           String nameWithoutExtension = fileName.replaceFirst("\\.csv\\.gz$", "");
           try {
+            // Use a fresh connection per retry — the existing connection may be broken
+            // after a JDBC communication error, so reusing it would fail again.
             retryWithBackoff(MAX_DELETE_RETRIES, "Delete stage file " + fileName, () -> {
-              connection.runDeleteStageFile(stageIdentifier, nameWithoutExtension);
+              try (SnowflakeOutputConnection con =
+                  (SnowflakeOutputConnection) connector.connect(true)) {
+                con.runDeleteStageFile(stageIdentifier, nameWithoutExtension);
+              }
               return null;
             });
           } catch (SQLException e) {

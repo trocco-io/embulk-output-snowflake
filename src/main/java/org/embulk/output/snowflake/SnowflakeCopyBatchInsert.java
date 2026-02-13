@@ -26,6 +26,10 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
   protected static final String nullString = "\\N";
   protected static final String newLineString = "\n";
   protected static final String delimiterString = "\t";
+  // https://docs.snowflake.com/en/sql-reference/sql/copy-into-table
+  // "The maximum number of files names that can be specified is 1000."
+  private static final int MAX_FILES_PER_COPY = 1000;
+  private static final int MAX_DELETE_RETRIES = 3;
   private final int maxUploadRetries;
   private final int maxCopyRetries;
 
@@ -38,7 +42,8 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
   private int batchWeight;
   private long totalRows;
   private int fileCount;
-  private List<Future<Void>> uploadAndCopyFutures;
+  private List<Future<Void>> uploadFutures;
+  private List<String> uploadedFileNames;
   private boolean emptyFieldAsNull;
 
   private String[] copyIntoTableColumnNames;
@@ -63,7 +68,8 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
     this.copyIntoCSVColumnNumbers = copyIntoCSVColumnNumbers;
     this.executorService = Executors.newCachedThreadPool();
     this.deleteStageFile = deleteStageFile;
-    this.uploadAndCopyFutures = new ArrayList();
+    this.uploadFutures = new ArrayList<>();
+    this.uploadedFileNames = Collections.synchronizedList(new ArrayList<>());
     this.maxUploadRetries = maxUploadRetries;
     this.maxCopyRetries = maxCopyRetries;
     this.emptyFieldAsNull = emptyFieldAsNull;
@@ -266,16 +272,19 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
   public void flush() throws IOException, SQLException {
     File file = closeCurrentFile(); // flush buffered data in writer
 
+    if (batchRows == 0) {
+      logger.info("Skipping upload of empty file");
+      file.delete();
+      openNewFile();
+      return;
+    }
+
     String snowflakeStageFileName = "embulk_snowflake_" + SnowflakeUtils.randomString(8);
 
     UploadTask uploadTask =
         new UploadTask(file, batchRows, stageIdentifier, snowflakeStageFileName, maxUploadRetries);
-    Future<Void> uploadFuture = executorService.submit(uploadTask);
-    uploadAndCopyFutures.add(uploadFuture);
-
-    CopyTask copyTask =
-        new CopyTask(uploadFuture, snowflakeStageFileName, emptyFieldAsNull, maxCopyRetries);
-    uploadAndCopyFutures.add(executorService.submit(copyTask));
+    uploadFutures.add(executorService.submit(uploadTask));
+    uploadedFileNames.add(snowflakeStageFileName + ".csv.gz");
 
     fileCount++;
     totalRows += batchRows;
@@ -302,10 +311,10 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
 
   @Override
   public void finish() throws IOException, SQLException {
-    for (Future<Void> uploadAndCopyFuture : uploadAndCopyFutures) {
+    // Wait for all uploads to complete
+    for (Future<Void> uploadFuture : uploadFutures) {
       try {
-        uploadAndCopyFuture.get();
-
+        uploadFuture.get();
       } catch (InterruptedException e) {
         throw new RuntimeException(e);
       } catch (ExecutionException e) {
@@ -316,7 +325,112 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
       }
     }
 
-    logger.info("Loaded {} files.", fileCount);
+    if (uploadedFileNames.isEmpty()) {
+      return;
+    }
+
+    // Run batch COPY in chunks of MAX_FILES_PER_COPY
+    try {
+      for (int i = 0; i < uploadedFileNames.size(); i += MAX_FILES_PER_COPY) {
+        List<String> chunk =
+            uploadedFileNames.subList(
+                i, Math.min(i + MAX_FILES_PER_COPY, uploadedFileNames.size()));
+        runBatchCopyWithRetry(chunk);
+      }
+
+      logger.info("Loaded {} files.", fileCount);
+    } finally {
+      // Delete stage files if configured — clean up even on partial failure
+      // runDeleteStageFile appends ".csv.gz" internally, so strip it from uploadedFileNames
+      if (deleteStageFile) {
+        for (String fileName : uploadedFileNames) {
+          String nameWithoutExtension = fileName.replaceFirst("\\.csv\\.gz$", "");
+          try {
+            // Use a fresh connection per retry — the existing connection may be broken
+            // after a JDBC communication error, so reusing it would fail again.
+            retryWithBackoff(
+                MAX_DELETE_RETRIES,
+                "Delete stage file " + fileName,
+                () -> {
+                  try (SnowflakeOutputConnection con =
+                      (SnowflakeOutputConnection) connector.connect(true)) {
+                    con.runDeleteStageFile(stageIdentifier, nameWithoutExtension);
+                  }
+                  return null;
+                });
+          } catch (SQLException e) {
+            logger.warn("Failed to delete stage file {}: {}", fileName, e.getMessage());
+          }
+        }
+      }
+    }
+  }
+
+  private void runBatchCopyWithRetry(List<String> fileNames) throws SQLException {
+    retryWithBackoff(
+        maxCopyRetries,
+        "Batch COPY",
+        () -> {
+          try (SnowflakeOutputConnection con =
+              (SnowflakeOutputConnection) connector.connect(true)) {
+            logger.info("Running batch COPY INTO for {} files: {}", fileNames.size(), fileNames);
+
+            long startTime = System.currentTimeMillis();
+            con.runBatchCopy(
+                tableIdentifier,
+                stageIdentifier,
+                fileNames,
+                copyIntoTableColumnNames,
+                copyIntoCSVColumnNumbers,
+                delimiterString,
+                emptyFieldAsNull);
+
+            double seconds = (System.currentTimeMillis() - startTime) / 1000.0;
+            logger.info(
+                "Loaded {} files ({} seconds for batch COPY): {}",
+                fileNames.size(),
+                String.format("%.2f", seconds),
+                fileNames);
+          }
+          return null;
+        });
+  }
+
+  @FunctionalInterface
+  private interface RetryableOperation<T> {
+    T execute() throws SQLException, IOException, InterruptedException;
+  }
+
+  private <T> T retryWithBackoff(
+      int maxRetries, String operationName, RetryableOperation<T> operation) throws SQLException {
+    int retries = 0;
+    while (true) {
+      try {
+        return operation.execute();
+      } catch (SQLException e) {
+        if (!isRetryable(e)) {
+          throw e;
+        }
+        retries++;
+        if (retries > maxRetries) {
+          throw e;
+        }
+        logger.warn(
+            "{} error (retry {}/{}): {}", operationName, retries, maxRetries, e.getMessage());
+        try {
+          Thread.sleep(retries * retries * 1000);
+        } catch (InterruptedException ie) {
+          throw new RuntimeException(ie);
+        }
+      } catch (IOException | InterruptedException e) {
+        throw new RuntimeException(e);
+      }
+    }
+  }
+
+  private boolean isRetryable(SQLException e) {
+    String message = e.getMessage();
+    return message != null && message.contains("JDBC driver encountered communication error");
   }
 
   @Override
@@ -364,117 +478,36 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
       this.maxUploadRetries = maxUploadRetries;
     }
 
-    public Void call() throws IOException, SQLException, InterruptedException {
-      int retries = 0;
+    public Void call() throws SQLException {
       try {
         long startTime = System.currentTimeMillis();
-        // put file to snowflake internal storage
-        SnowflakeOutputConnection con = (SnowflakeOutputConnection) connector.connect(true);
-
-        while (true) {
-          try {
-            logger.info(
-                String.format(
-                    "Uploading file id %s to Snowflake (%,d bytes %,d rows)",
-                    snowflakeStageFileName, file.length(), batchRows));
-            FileInputStream fileInputStream = new FileInputStream(file);
-            con.runUploadFile(stageIdentifier, snowflakeStageFileName, fileInputStream);
-            break;
-          } catch (SQLException e) {
-            retries++;
-            if (retries > this.maxUploadRetries) {
-              throw e;
-            }
-            logger.warn(
-                String.format(
-                    "Upload error %s file %s retries: %d", e, snowflakeStageFileName, retries));
-            Thread.sleep(retries * retries * 1000);
-          }
-        }
+        retryWithBackoff(
+            maxUploadRetries,
+            "Upload " + snowflakeStageFileName,
+            () -> {
+              try (SnowflakeOutputConnection con =
+                  (SnowflakeOutputConnection) connector.connect(true)) {
+                logger.info(
+                    "Uploading file id {} to Snowflake ({} bytes {} rows)",
+                    snowflakeStageFileName,
+                    String.format("%,d", file.length()),
+                    String.format("%,d", batchRows));
+                FileInputStream fileInputStream = new FileInputStream(file);
+                con.runUploadFile(stageIdentifier, snowflakeStageFileName, fileInputStream);
+              }
+              return null;
+            });
 
         double seconds = (System.currentTimeMillis() - startTime) / 1000.0;
-
         logger.info(
-            String.format("Uploaded file %s (%.2f seconds)", snowflakeStageFileName, seconds));
+            "Uploaded file {} ({} seconds)",
+            snowflakeStageFileName,
+            String.format("%.2f", seconds));
       } finally {
         file.delete();
       }
 
       return null;
-    }
-  }
-
-  private class CopyTask implements Callable<Void> {
-    private final Future<Void> uploadFuture;
-    private final String snowflakeStageFileName;
-    private final boolean emptyFieldAsNull;
-    private final int maxCopyRetries;
-
-    public CopyTask(
-        Future<Void> uploadFuture,
-        String snowflakeStageFileName,
-        boolean emptyFieldAsNull,
-        int maxCopyRetries) {
-      this.uploadFuture = uploadFuture;
-      this.snowflakeStageFileName = snowflakeStageFileName;
-      this.emptyFieldAsNull = emptyFieldAsNull;
-      this.maxCopyRetries = maxCopyRetries;
-    }
-
-    public Void call() throws SQLException, InterruptedException, ExecutionException {
-      try {
-        uploadFuture.get();
-
-        int retries = 0;
-        while (true) {
-          try (SnowflakeOutputConnection con =
-              (SnowflakeOutputConnection) connector.connect(true)) {
-            logger.info("Running COPY from file {}", snowflakeStageFileName);
-
-            long startTime = System.currentTimeMillis();
-            con.runCopy(
-                tableIdentifier,
-                stageIdentifier,
-                snowflakeStageFileName,
-                copyIntoTableColumnNames,
-                copyIntoCSVColumnNumbers,
-                delimiterString,
-                emptyFieldAsNull);
-
-            double seconds = (System.currentTimeMillis() - startTime) / 1000.0;
-
-            logger.info(
-                String.format(
-                    "Loaded file %s (%.2f seconds for COPY)", snowflakeStageFileName, seconds));
-
-            break;
-          } catch (SQLException e) {
-            if (!isRetryableForCopyTask(e)) {
-              throw e;
-            }
-
-            retries++;
-            if (retries > this.maxCopyRetries) {
-              throw e;
-            }
-            logger.warn(
-                String.format(
-                    "Copy error %s file %s retries: %d", e, snowflakeStageFileName, retries));
-            Thread.sleep(retries * retries * 1000);
-          }
-        }
-      } finally {
-        if (deleteStageFile) {
-          connection.runDeleteStageFile(stageIdentifier, snowflakeStageFileName);
-        }
-      }
-
-      return null;
-    }
-
-    private boolean isRetryableForCopyTask(SQLException e) {
-      String message = e.getMessage();
-      return message != null && message.contains("JDBC driver encountered communication error");
     }
   }
 }

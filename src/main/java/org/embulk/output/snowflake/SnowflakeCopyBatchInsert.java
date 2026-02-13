@@ -348,13 +348,16 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
           try {
             // Use a fresh connection per retry — the existing connection may be broken
             // after a JDBC communication error, so reusing it would fail again.
-            retryWithBackoff(MAX_DELETE_RETRIES, "Delete stage file " + fileName, () -> {
-              try (SnowflakeOutputConnection con =
-                  (SnowflakeOutputConnection) connector.connect(true)) {
-                con.runDeleteStageFile(stageIdentifier, nameWithoutExtension);
-              }
-              return null;
-            });
+            retryWithBackoff(
+                MAX_DELETE_RETRIES,
+                "Delete stage file " + fileName,
+                () -> {
+                  try (SnowflakeOutputConnection con =
+                      (SnowflakeOutputConnection) connector.connect(true)) {
+                    con.runDeleteStageFile(stageIdentifier, nameWithoutExtension);
+                  }
+                  return null;
+                });
           } catch (SQLException e) {
             logger.warn("Failed to delete stage file {}: {}", fileName, e.getMessage());
           }
@@ -364,26 +367,33 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
   }
 
   private void runBatchCopyWithRetry(List<String> fileNames) throws SQLException {
-    retryWithBackoff(maxCopyRetries, "Batch COPY", () -> {
-      try (SnowflakeOutputConnection con = (SnowflakeOutputConnection) connector.connect(true)) {
-        logger.info("Running batch COPY INTO for {} files: {}", fileNames.size(), fileNames);
+    retryWithBackoff(
+        maxCopyRetries,
+        "Batch COPY",
+        () -> {
+          try (SnowflakeOutputConnection con =
+              (SnowflakeOutputConnection) connector.connect(true)) {
+            logger.info("Running batch COPY INTO for {} files: {}", fileNames.size(), fileNames);
 
-        long startTime = System.currentTimeMillis();
-        con.runBatchCopy(
-            tableIdentifier,
-            stageIdentifier,
-            fileNames,
-            copyIntoTableColumnNames,
-            copyIntoCSVColumnNumbers,
-            delimiterString,
-            emptyFieldAsNull);
+            long startTime = System.currentTimeMillis();
+            con.runBatchCopy(
+                tableIdentifier,
+                stageIdentifier,
+                fileNames,
+                copyIntoTableColumnNames,
+                copyIntoCSVColumnNumbers,
+                delimiterString,
+                emptyFieldAsNull);
 
-        double seconds = (System.currentTimeMillis() - startTime) / 1000.0;
-        logger.info("Loaded {} files ({} seconds for batch COPY): {}",
-            fileNames.size(), String.format("%.2f", seconds), fileNames);
-      }
-      return null;
-    });
+            double seconds = (System.currentTimeMillis() - startTime) / 1000.0;
+            logger.info(
+                "Loaded {} files ({} seconds for batch COPY): {}",
+                fileNames.size(),
+                String.format("%.2f", seconds),
+                fileNames);
+          }
+          return null;
+        });
   }
 
   @FunctionalInterface
@@ -405,7 +415,8 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
         if (retries > maxRetries) {
           throw e;
         }
-        logger.warn("{} error (retry {}/{}): {}", operationName, retries, maxRetries, e.getMessage());
+        logger.warn(
+            "{} error (retry {}/{}): {}", operationName, retries, maxRetries, e.getMessage());
         try {
           Thread.sleep(retries * retries * 1000);
         } catch (InterruptedException ie) {
@@ -470,21 +481,28 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
     public Void call() throws SQLException {
       try {
         long startTime = System.currentTimeMillis();
-        retryWithBackoff(maxUploadRetries, "Upload " + snowflakeStageFileName, () -> {
-          try (SnowflakeOutputConnection con =
-              (SnowflakeOutputConnection) connector.connect(true)) {
-            logger.info("Uploading file id {} to Snowflake ({} bytes {} rows)",
-                snowflakeStageFileName, String.format("%,d", file.length()),
-                String.format("%,d", batchRows));
-            FileInputStream fileInputStream = new FileInputStream(file);
-            con.runUploadFile(stageIdentifier, snowflakeStageFileName, fileInputStream);
-          }
-          return null;
-        });
+        retryWithBackoff(
+            maxUploadRetries,
+            "Upload " + snowflakeStageFileName,
+            () -> {
+              try (SnowflakeOutputConnection con =
+                  (SnowflakeOutputConnection) connector.connect(true)) {
+                logger.info(
+                    "Uploading file id {} to Snowflake ({} bytes {} rows)",
+                    snowflakeStageFileName,
+                    String.format("%,d", file.length()),
+                    String.format("%,d", batchRows));
+                FileInputStream fileInputStream = new FileInputStream(file);
+                con.runUploadFile(stageIdentifier, snowflakeStageFileName, fileInputStream);
+              }
+              return null;
+            });
 
         double seconds = (System.currentTimeMillis() - startTime) / 1000.0;
-        logger.info("Uploaded file {} ({} seconds)",
-            snowflakeStageFileName, String.format("%.2f", seconds));
+        logger.info(
+            "Uploaded file {} ({} seconds)",
+            snowflakeStageFileName,
+            String.format("%.2f", seconds));
       } finally {
         file.delete();
       }

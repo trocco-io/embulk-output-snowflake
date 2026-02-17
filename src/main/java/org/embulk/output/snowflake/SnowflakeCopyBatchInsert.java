@@ -45,6 +45,7 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
   private List<Future<Void>> uploadFutures;
   private List<String> uploadedFileNames;
   private boolean emptyFieldAsNull;
+  private final boolean escapeWithEnclosing;
 
   private String[] copyIntoTableColumnNames;
 
@@ -58,7 +59,8 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
       boolean deleteStageFile,
       int maxUploadRetries,
       int maxCopyRetries,
-      boolean emptyFieldAsNull)
+      boolean emptyFieldAsNull,
+      boolean escapeWithEnclosing)
       throws IOException {
     this.index = 0;
     openNewFile();
@@ -73,6 +75,7 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
     this.maxUploadRetries = maxUploadRetries;
     this.maxCopyRetries = maxCopyRetries;
     this.emptyFieldAsNull = emptyFieldAsNull;
+    this.escapeWithEnclosing = escapeWithEnclosing;
   }
 
   @Override
@@ -182,19 +185,32 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
 
   public void setString(String v) throws IOException {
     appendDelimiter();
-    setEscapedString(v);
+    if (escapeWithEnclosing) {
+      setEnclosedString(v);
+    } else {
+      setEscapedString(v);
+    }
     nextColumn(v.length() * 2 + 4);
   }
 
   public void setNString(String v) throws IOException {
     appendDelimiter();
-    setEscapedString(v);
+    if (escapeWithEnclosing) {
+      setEnclosedString(v);
+    } else {
+      setEscapedString(v);
+    }
     nextColumn(v.length() * 2 + 4);
   }
 
   public void setBytes(byte[] v) throws IOException {
     appendDelimiter();
-    setEscapedString(String.valueOf(v));
+    String s = String.valueOf(v);
+    if (escapeWithEnclosing) {
+      setEnclosedString(s);
+    } else {
+      setEscapedString(s);
+    }
     nextColumn(v.length + 4);
   }
 
@@ -262,10 +278,28 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
   }
 
   private void setEscapedString(String v) throws IOException {
-    for (char c : v.toCharArray()) {
-      writer.write(escape(c));
+    int len = v.length();
+    for (int i = 0; i < len; i++) {
+      writer.write(escape(v.charAt(i)));
     }
-    nextColumn(v.length() * 2 + 4);
+  }
+
+  // Enclose field with double quotes. Inside the quotes:
+  // - " is escaped as "" (CSV standard)
+  // - \0 (null byte) is removed
+  // - All other characters (\n, \t, \r, \\) are written as-is
+  private void setEnclosedString(String v) throws IOException {
+    writer.write('"');
+    int len = v.length();
+    for (int i = 0; i < len; i++) {
+      char c = v.charAt(i);
+      if (c == '"') {
+        writer.write("\"\"");
+      } else if (c != 0) {
+        writer.write(c);
+      }
+    }
+    writer.write('"');
   }
 
   @Override
@@ -383,7 +417,8 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
                 copyIntoTableColumnNames,
                 copyIntoCSVColumnNumbers,
                 delimiterString,
-                emptyFieldAsNull);
+                emptyFieldAsNull,
+                escapeWithEnclosing);
 
             double seconds = (System.currentTimeMillis() - startTime) / 1000.0;
             logger.info(

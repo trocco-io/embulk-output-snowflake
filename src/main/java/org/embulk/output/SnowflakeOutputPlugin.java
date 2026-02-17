@@ -87,6 +87,10 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
     @ConfigDefault("false")
     public boolean getDeleteStageOnError();
 
+    @Config("escape_with_enclosing")
+    @ConfigDefault("false")
+    public boolean getEscapeWithEnclosing();
+
     @Config("match_by_column_name")
     @ConfigDefault("\"none\"")
     public MatchByColumnName getMatchByColumnName();
@@ -332,7 +336,8 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
         false,
         pluginTask.getMaxUploadRetries(),
         pluginTask.getMaxCopyRetries(),
-        pluginTask.getEmtpyFieldAsNull());
+        pluginTask.getEmtpyFieldAsNull(),
+        pluginTask.getEscapeWithEnclosing());
   }
 
   @Override

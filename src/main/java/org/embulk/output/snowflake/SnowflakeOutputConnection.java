@@ -170,7 +170,8 @@ public class SnowflakeOutputConnection extends JdbcOutputConnection {
       String[] tableColumnNames,
       int[] csvColumnNumbers,
       String delimiterString,
-      boolean emptyFieldAsNull)
+      boolean emptyFieldAsNull,
+      boolean escapeWithEnclosing)
       throws SQLException {
     String sql =
         tableColumnNames != null && tableColumnNames.length > 0
@@ -181,9 +182,15 @@ public class SnowflakeOutputConnection extends JdbcOutputConnection {
                 tableColumnNames,
                 csvColumnNumbers,
                 delimiterString,
-                emptyFieldAsNull)
+                emptyFieldAsNull,
+                escapeWithEnclosing)
             : buildBatchCopySQL(
-                tableIdentifier, stageIdentifier, fileNames, delimiterString, emptyFieldAsNull);
+                tableIdentifier,
+                stageIdentifier,
+                fileNames,
+                delimiterString,
+                emptyFieldAsNull,
+                escapeWithEnclosing);
 
     runUpdate(sql);
   }
@@ -193,7 +200,8 @@ public class SnowflakeOutputConnection extends JdbcOutputConnection {
       StageIdentifier stageIdentifier,
       List<String> fileNames,
       String delimiterString,
-      boolean emptyFieldAsNull) {
+      boolean emptyFieldAsNull,
+      boolean escapeWithEnclosing) {
     StringBuilder sb = new StringBuilder();
     sb.append("COPY INTO ");
     quoteTableIdentifier(sb, tableIdentifier);
@@ -207,6 +215,13 @@ public class SnowflakeOutputConnection extends JdbcOutputConnection {
     if (!emptyFieldAsNull) {
       sb.append(" EMPTY_FIELD_AS_NULL = FALSE");
     }
+    if (escapeWithEnclosing) {
+      sb.append(" FIELD_OPTIONALLY_ENCLOSED_BY = '\"'");
+      // Disable backslash escape interpretation for unenclosed fields (e.g. boolean, numeric).
+      // The default ESCAPE_UNENCLOSED_FIELD is '\\', which could cause Snowflake to
+      // misinterpret backslashes in unenclosed fields as escape characters.
+      sb.append(" ESCAPE_UNENCLOSED_FIELD = NONE");
+    }
     sb.append(" );");
     return sb.toString();
   }
@@ -218,7 +233,8 @@ public class SnowflakeOutputConnection extends JdbcOutputConnection {
       String[] tableColumnNames,
       int[] csvColumnNumbers,
       String delimiterString,
-      boolean emptyFieldAsNull) {
+      boolean emptyFieldAsNull,
+      boolean escapeWithEnclosing) {
     StringBuilder sb = new StringBuilder();
     sb.append("COPY INTO ");
     quoteTableIdentifier(sb, tableIdentifier);
@@ -247,6 +263,13 @@ public class SnowflakeOutputConnection extends JdbcOutputConnection {
     sb.append("'");
     if (!emptyFieldAsNull) {
       sb.append(" EMPTY_FIELD_AS_NULL = FALSE");
+    }
+    if (escapeWithEnclosing) {
+      sb.append(" FIELD_OPTIONALLY_ENCLOSED_BY = '\"'");
+      // Disable backslash escape interpretation for unenclosed fields (e.g. boolean, numeric).
+      // The default ESCAPE_UNENCLOSED_FIELD is '\\', which could cause Snowflake to
+      // misinterpret backslashes in unenclosed fields as escape characters.
+      sb.append(" ESCAPE_UNENCLOSED_FIELD = NONE");
     }
     sb.append(" );");
     return sb.toString();

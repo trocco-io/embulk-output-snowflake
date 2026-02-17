@@ -219,6 +219,7 @@ public class TestSnowflakeOutputPlugin {
     assertEquals("public", task.getSchema());
     assertEquals("", task.getRole());
     assertEquals(false, task.getDeleteStage());
+    assertEquals(false, task.getEscapeWithEnclosing());
   }
 
   @Test

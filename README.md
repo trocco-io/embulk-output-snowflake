@@ -23,6 +23,7 @@ Snowflake output plugin for Embulk loads records to Snowflake.
 - **delete_stage**: whether to drop the internal stage after a successful load (boolean, default: false)
 - **delete_stage_on_error**: whether to drop the internal stage when an error occurs. Only effective when `delete_stage` is true. (boolean, default: false)
 - **empty_field_as_null**: whether to treat empty fields in the TSV as NULL during COPY INTO. When false, Snowflake sets `EMPTY_FIELD_AS_NULL = FALSE` in the FILE_FORMAT. (boolean, default: true)
+- **escape_with_enclosing**: whether to enclose string fields with double quotes instead of using backslash escaping. When enabled, COPY INTO uses `FIELD_OPTIONALLY_ENCLOSED_BY = '"'` and `ESCAPE_UNENCLOSED_FIELD = NONE`. This allows newline characters in data to be correctly loaded as actual newlines in Snowflake, rather than being stored as literal `\n` strings. (boolean, default: false)
 - **retry_limit**: max retry count for database operations (integer, default: 12). When intermediate table to create already created by another process, this plugin will retry with another table name to avoid collision.
 - **retry_wait**: initial retry wait time in milliseconds (integer, default: 1000 (1 second))
 - **max_retry_wait**: upper limit of retry wait, which will be doubled at every retry (integer, default: 1800000 (30 minutes))

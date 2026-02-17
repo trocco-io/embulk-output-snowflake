@@ -281,7 +281,6 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
     for (char c : v.toCharArray()) {
       writer.write(escape(c));
     }
-    nextColumn(v.length() * 2 + 4);
   }
 
   // Enclose field with double quotes. Inside the quotes:

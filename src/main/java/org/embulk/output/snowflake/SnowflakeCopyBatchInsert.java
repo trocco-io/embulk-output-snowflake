@@ -278,8 +278,9 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
   }
 
   private void setEscapedString(String v) throws IOException {
-    for (char c : v.toCharArray()) {
-      writer.write(escape(c));
+    int len = v.length();
+    for (int i = 0; i < len; i++) {
+      writer.write(escape(v.charAt(i)));
     }
   }
 
@@ -289,7 +290,9 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
   // - All other characters (\n, \t, \r, \\) are written as-is
   private void setEnclosedString(String v) throws IOException {
     writer.write('"');
-    for (char c : v.toCharArray()) {
+    int len = v.length();
+    for (int i = 0; i < len; i++) {
+      char c = v.charAt(i);
       if (c == '"') {
         writer.write("\"\"");
       } else if (c != 0) {

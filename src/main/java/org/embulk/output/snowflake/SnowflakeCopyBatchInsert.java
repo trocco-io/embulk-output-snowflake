@@ -301,6 +301,7 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
       }
     }
     writer.write('"');
+    nextColumn(v.length() * 2 + 4);
   }
 
   @Override

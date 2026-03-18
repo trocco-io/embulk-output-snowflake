@@ -43,7 +43,7 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
   private int batchWeight;
   private long totalRows;
   private int fileCount;
-  // Upload and batch COPY are pipelined in chunks of MAX_FILES_PER_COPY.
+  // Upload and batch COPY are pipelined in chunks of BATCH_COPY_CHUNK_SIZE.
   // When a chunk fills up, its uploads and file names are captured into a BatchCopyTask
   // (submitted to executorService), and these two lists are reset for the next chunk.
   private List<Future<Void>> currentChunkUploadFutures;
@@ -399,25 +399,23 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
 
   @Override
   public void finish() throws IOException, SQLException {
-    // Handle remaining chunk (below threshold)
-    if (!currentChunkFileNames.isEmpty()) {
-      waitForFutures(currentChunkUploadFutures);
-      allUploadedFileNames.addAll(currentChunkFileNames);
-      runBatchCopyWithRetry(currentChunkFileNames);
-    }
-
-    // Wait for all previously submitted batch COPY tasks
-    waitForFutures(copyFutures);
-
-    if (allUploadedFileNames.isEmpty()) {
-      return;
-    }
-
     try {
-      logger.info("Loaded {} files.", fileCount);
+      // Handle remaining chunk (below threshold)
+      if (!currentChunkFileNames.isEmpty()) {
+        waitForFutures(currentChunkUploadFutures);
+        allUploadedFileNames.addAll(currentChunkFileNames);
+        runBatchCopyWithRetry(currentChunkFileNames);
+      }
+
+      // Wait for all previously submitted batch COPY tasks
+      waitForFutures(copyFutures);
+
+      if (!allUploadedFileNames.isEmpty()) {
+        logger.info("Loaded {} files.", fileCount);
+      }
     } finally {
       // Delete stage files if configured — clean up even on partial failure
-      if (deleteStageFile) {
+      if (deleteStageFile && !allUploadedFileNames.isEmpty()) {
         deleteStageFiles(allUploadedFileNames);
       }
     }

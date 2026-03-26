@@ -19,7 +19,8 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
   private final Logger logger = LoggerFactory.getLogger(SnowflakeCopyBatchInsert.class);
   private final JdbcOutputConnector connector;
   protected static final Charset FILE_CHARSET = Charset.forName("UTF-8");
-  private final ExecutorService executorService;
+  private final ExecutorService uploadExecutorService;
+  private final ExecutorService copyExecutorService;
   private final StageIdentifier stageIdentifier;
   private final boolean deleteStageFile;
 
@@ -27,8 +28,9 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
   protected static final String newLineString = "\n";
   protected static final String delimiterString = "\t";
   // https://docs.snowflake.com/en/sql-reference/sql/copy-into-table
-  // Number of files per chunk for pipelining upload and batch COPY.
-  // When a chunk fills up, batch COPY is submitted asynchronously while uploads continue.
+  // Number of completed uploads to accumulate before submitting a batch COPY.
+  // Batching is based on upload completion order (not submission order) to avoid
+  // stalling on slow uploads within a chunk.
   private static final int BATCH_COPY_CHUNK_SIZE = 20;
   private static final int MAX_DELETE_RETRIES = 3;
   private final int maxUploadRetries;
@@ -43,12 +45,13 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
   private int batchWeight;
   private long totalRows;
   private int fileCount;
-  // Upload and batch COPY are pipelined in chunks of BATCH_COPY_CHUNK_SIZE.
-  // When a chunk fills up, its uploads and file names are captured into a BatchCopyTask
-  // (submitted to executorService), and these two lists are reset for the next chunk.
-  private List<Future<Void>> currentChunkUploadFutures;
-  private List<String> currentChunkFileNames;
-  // Tracks submitted BatchCopyTask futures so finish() can wait for all pipelined COPYs.
+  // CompletionService wraps the upload executor to allow polling uploads by completion order.
+  private final ExecutorCompletionService<String> uploadCompletionService;
+  // Number of uploads submitted but not yet drained from uploadCompletionService.
+  private int pendingUploads;
+  // File names of completed uploads ready to be included in the next batch COPY.
+  private final List<String> readyForCopyFileNames;
+  // Tracks submitted batch COPY futures so finish() can wait for all pipelined COPYs.
   private final List<Future<Void>> copyFutures;
   // Accumulates all file names across chunks for stage file cleanup in finish().
   private final List<String> allUploadedFileNames;
@@ -76,10 +79,14 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
     this.stageIdentifier = stageIdentifier;
     this.copyIntoTableColumnNames = copyIntoTableColumnNames;
     this.copyIntoCSVColumnNumbers = copyIntoCSVColumnNumbers;
-    this.executorService = Executors.newCachedThreadPool();
+    this.uploadExecutorService = Executors.newCachedThreadPool();
+    // Single-thread executor for COPY: limits to 1 concurrent COPY per task to avoid
+    // connection explosion, while keeping the main thread free to continue reading data.
+    this.copyExecutorService = Executors.newSingleThreadExecutor();
+    this.uploadCompletionService = new ExecutorCompletionService<>(uploadExecutorService);
     this.deleteStageFile = deleteStageFile;
-    this.currentChunkUploadFutures = new ArrayList<>();
-    this.currentChunkFileNames = new ArrayList<>();
+    this.pendingUploads = 0;
+    this.readyForCopyFileNames = new ArrayList<>();
     this.copyFutures = new ArrayList<>();
     this.allUploadedFileNames = new ArrayList<>();
     this.maxUploadRetries = maxUploadRetries;
@@ -329,28 +336,54 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
 
     UploadTask uploadTask =
         new UploadTask(file, batchRows, stageIdentifier, snowflakeStageFileName, maxUploadRetries);
-    currentChunkUploadFutures.add(executorService.submit(uploadTask));
-    currentChunkFileNames.add(snowflakeStageFileName + ".csv.gz");
+    uploadCompletionService.submit(uploadTask);
+    pendingUploads++;
 
     fileCount++;
     totalRows += batchRows;
     batchRows = 0;
     batchWeight = 0;
 
-    // Submit batch COPY when chunk reaches threshold
-    if (currentChunkFileNames.size() >= BATCH_COPY_CHUNK_SIZE) {
-      submitBatchCopyForCurrentChunk();
-    }
+    drainCompletedUploads();
+    submitBatchCopyIfReady();
 
     openNewFile();
   }
 
+  private void drainCompletedUploads() throws SQLException {
+    Future<String> completed;
+    while ((completed = uploadCompletionService.poll()) != null) {
+      readyForCopyFileNames.add(getOrUnwrap(completed));
+      pendingUploads--;
+    }
+  }
+
+  private void submitBatchCopyIfReady() {
+    while (readyForCopyFileNames.size() >= BATCH_COPY_CHUNK_SIZE) {
+      List<String> batch =
+          new ArrayList<>(readyForCopyFileNames.subList(0, BATCH_COPY_CHUNK_SIZE));
+      readyForCopyFileNames.subList(0, BATCH_COPY_CHUNK_SIZE).clear();
+
+      allUploadedFileNames.addAll(batch);
+
+      copyFutures.add(
+          copyExecutorService.submit(
+              () -> {
+                runBatchCopyWithRetry(batch);
+                return null;
+              }));
+    }
+  }
+
   public void close() throws IOException, SQLException {
-    executorService.shutdownNow();
+    uploadExecutorService.shutdownNow();
+    copyExecutorService.shutdownNow();
 
     try {
-      executorService.awaitTermination(60, TimeUnit.SECONDS);
+      uploadExecutorService.awaitTermination(60, TimeUnit.SECONDS);
+      copyExecutorService.awaitTermination(60, TimeUnit.SECONDS);
     } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
     }
 
     closeCurrentFile().delete();
@@ -360,55 +393,32 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
     }
   }
 
-  private void submitBatchCopyForCurrentChunk() {
-    // Capture current chunk data
-    List<Future<Void>> chunkUploadFutures = currentChunkUploadFutures;
-    List<String> chunkFileNames = new ArrayList<>(currentChunkFileNames);
-
-    // Submit BatchCopyTask — upload wait happens inside the task
-    copyFutures.add(
-        executorService.submit(
-            () -> {
-              waitForFutures(chunkUploadFutures);
-              runBatchCopyWithRetry(chunkFileNames);
-              return null;
-            }));
-
-    // Track all file names for delete
-    allUploadedFileNames.addAll(currentChunkFileNames);
-
-    // Reset for next chunk
-    currentChunkUploadFutures = new ArrayList<>();
-    currentChunkFileNames = new ArrayList<>();
-  }
-
-  private void waitForFutures(List<Future<Void>> futures) throws SQLException {
-    for (Future<Void> future : futures) {
-      try {
-        future.get();
-      } catch (InterruptedException e) {
-        throw new RuntimeException(e);
-      } catch (ExecutionException e) {
-        if (e.getCause() instanceof SQLException) {
-          throw (SQLException) e.getCause();
-        }
-        throw new RuntimeException(e);
-      }
-    }
-  }
-
   @Override
   public void finish() throws IOException, SQLException {
     try {
-      // Handle remaining chunk (below threshold)
-      if (!currentChunkFileNames.isEmpty()) {
-        waitForFutures(currentChunkUploadFutures);
-        allUploadedFileNames.addAll(currentChunkFileNames);
-        runBatchCopyWithRetry(currentChunkFileNames);
+      while (pendingUploads > 0) {
+        try {
+          readyForCopyFileNames.add(getOrUnwrap(uploadCompletionService.take()));
+        } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
+          throw new RuntimeException(e);
+        }
+        pendingUploads--;
       }
 
-      // Wait for all previously submitted batch COPY tasks
-      waitForFutures(copyFutures);
+      // Submit batch COPY for any full chunks among remaining completed uploads
+      submitBatchCopyIfReady();
+
+      // Run final batch COPY for remaining files (below threshold) synchronously
+      if (!readyForCopyFileNames.isEmpty()) {
+        allUploadedFileNames.addAll(readyForCopyFileNames);
+        runBatchCopyWithRetry(readyForCopyFileNames);
+      }
+
+      for (Future<Void> future : copyFutures) {
+        getOrUnwrap(future);
+      }
+      copyFutures.clear();
 
       if (!allUploadedFileNames.isEmpty()) {
         logger.info("Loaded {} files.", fileCount);
@@ -418,6 +428,20 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
       if (deleteStageFile && !allUploadedFileNames.isEmpty()) {
         deleteStageFiles(allUploadedFileNames);
       }
+    }
+  }
+
+  private <T> T getOrUnwrap(Future<T> future) throws SQLException {
+    try {
+      return future.get();
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new RuntimeException(e);
+    } catch (ExecutionException e) {
+      if (e.getCause() instanceof SQLException) {
+        throw (SQLException) e.getCause();
+      }
+      throw new RuntimeException(e);
     }
   }
 
@@ -537,7 +561,11 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
     }
   }
 
-  private class UploadTask implements Callable<Void> {
+  /**
+   * Upload task that returns the staged file name (with .csv.gz extension) on completion. Used with
+   * ExecutorCompletionService to allow batch COPY to be triggered by upload completion order.
+   */
+  private class UploadTask implements Callable<String> {
     private final File file;
     private final int batchRows;
     private final String snowflakeStageFileName;
@@ -557,7 +585,7 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
       this.maxUploadRetries = maxUploadRetries;
     }
 
-    public Void call() throws SQLException {
+    public String call() throws SQLException {
       try {
         long startTime = System.currentTimeMillis();
         retryWithBackoff(
@@ -586,7 +614,7 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
         file.delete();
       }
 
-      return null;
+      return snowflakeStageFileName + ".csv.gz";
     }
   }
 }

@@ -360,8 +360,7 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
 
   private void submitBatchCopyIfReady() {
     while (readyForCopyFileNames.size() >= BATCH_COPY_CHUNK_SIZE) {
-      List<String> batch =
-          new ArrayList<>(readyForCopyFileNames.subList(0, BATCH_COPY_CHUNK_SIZE));
+      List<String> batch = new ArrayList<>(readyForCopyFileNames.subList(0, BATCH_COPY_CHUNK_SIZE));
       readyForCopyFileNames.subList(0, BATCH_COPY_CHUNK_SIZE).clear();
 
       allUploadedFileNames.addAll(batch);

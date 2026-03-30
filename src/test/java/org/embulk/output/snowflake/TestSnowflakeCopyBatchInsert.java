@@ -18,8 +18,8 @@ public class TestSnowflakeCopyBatchInsert {
         null, null, new String[0], new int[0], false, 3, 3, true, escapeWithEnclosing);
   }
 
-  private SnowflakeCopyBatchInsert createBatchInsertWithConnector(
-      JdbcOutputConnector connector) throws Exception {
+  private SnowflakeCopyBatchInsert createBatchInsertWithConnector(JdbcOutputConnector connector)
+      throws Exception {
     return new SnowflakeCopyBatchInsert(
         connector, null, new String[0], new int[0], false, 0, 0, true, false);
   }
@@ -249,9 +249,10 @@ public class TestSnowflakeCopyBatchInsert {
   @Test
   public void testFlushFailsFastOnUploadError() throws Exception {
     // Connector that always throws on connect — upload will fail
-    JdbcOutputConnector failingConnector = autoCommit -> {
-      throw new SQLException("Connection refused");
-    };
+    JdbcOutputConnector failingConnector =
+        autoCommit -> {
+          throw new SQLException("Connection refused");
+        };
 
     SnowflakeCopyBatchInsert batch = createBatchInsertWithConnector(failingConnector);
     try {
@@ -273,9 +274,10 @@ public class TestSnowflakeCopyBatchInsert {
 
   @Test
   public void testFinishDetectsUploadError() throws Exception {
-    JdbcOutputConnector failingConnector = autoCommit -> {
-      throw new SQLException("Upload failed");
-    };
+    JdbcOutputConnector failingConnector =
+        autoCommit -> {
+          throw new SQLException("Upload failed");
+        };
 
     SnowflakeCopyBatchInsert batch = createBatchInsertWithConnector(failingConnector);
     try {

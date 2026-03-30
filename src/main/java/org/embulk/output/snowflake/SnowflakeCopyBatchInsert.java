@@ -52,7 +52,7 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
   // File names of completed uploads ready to be included in the next batch COPY.
   private final List<String> readyForCopyFileNames;
   // Tracks submitted batch COPY futures so finish() can wait for all pipelined COPYs.
-  private final List<Future<Void>> copyFutures;
+  final List<Future<Void>> copyFutures;
   // Accumulates all file names across chunks for stage file cleanup in finish().
   private final List<String> allUploadedFileNames;
   private boolean emptyFieldAsNull;
@@ -345,6 +345,7 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
     batchWeight = 0;
 
     drainCompletedUploads();
+    checkCompletedCopies();
     submitBatchCopyIfReady();
 
     openNewFile();
@@ -355,6 +356,17 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
     while ((completed = uploadCompletionService.poll()) != null) {
       readyForCopyFileNames.add(getOrUnwrap(completed));
       pendingUploads--;
+    }
+  }
+
+  private void checkCompletedCopies() throws SQLException {
+    Iterator<Future<Void>> it = copyFutures.iterator();
+    while (it.hasNext()) {
+      Future<Void> future = it.next();
+      if (future.isDone()) {
+        getOrUnwrap(future);
+        it.remove();
+      }
     }
   }
 

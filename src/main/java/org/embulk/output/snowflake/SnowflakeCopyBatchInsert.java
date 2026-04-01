@@ -19,7 +19,8 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
   private final Logger logger = LoggerFactory.getLogger(SnowflakeCopyBatchInsert.class);
   private final JdbcOutputConnector connector;
   protected static final Charset FILE_CHARSET = Charset.forName("UTF-8");
-  private final ExecutorService executorService;
+  private final ExecutorService uploadExecutorService;
+  private final ExecutorService copyExecutorService;
   private final StageIdentifier stageIdentifier;
   private final boolean deleteStageFile;
 
@@ -27,8 +28,10 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
   protected static final String newLineString = "\n";
   protected static final String delimiterString = "\t";
   // https://docs.snowflake.com/en/sql-reference/sql/copy-into-table
-  // "The maximum number of files names that can be specified is 1000."
-  private static final int MAX_FILES_PER_COPY = 1000;
+  // Number of completed uploads to accumulate before submitting a batch COPY.
+  // Batching is based on upload completion order (not submission order) to avoid
+  // stalling on slow uploads within a chunk.
+  private static final int BATCH_COPY_CHUNK_SIZE = 20;
   private static final int MAX_DELETE_RETRIES = 3;
   private final int maxUploadRetries;
   private final int maxCopyRetries;
@@ -42,8 +45,16 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
   private int batchWeight;
   private long totalRows;
   private int fileCount;
-  private List<Future<Void>> uploadFutures;
-  private List<String> uploadedFileNames;
+  // CompletionService wraps the upload executor to allow polling uploads by completion order.
+  private final ExecutorCompletionService<String> uploadCompletionService;
+  // Number of uploads submitted but not yet drained from uploadCompletionService.
+  private int pendingUploads;
+  // File names of completed uploads ready to be included in the next batch COPY.
+  private final List<String> readyForCopyFileNames;
+  // Tracks submitted batch COPY futures so finish() can wait for all pipelined COPYs.
+  final List<Future<Void>> copyFutures;
+  // Accumulates all file names across chunks for stage file cleanup in finish().
+  private final List<String> allUploadedFileNames;
   private boolean emptyFieldAsNull;
   private final boolean escapeWithEnclosing;
 
@@ -68,10 +79,16 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
     this.stageIdentifier = stageIdentifier;
     this.copyIntoTableColumnNames = copyIntoTableColumnNames;
     this.copyIntoCSVColumnNumbers = copyIntoCSVColumnNumbers;
-    this.executorService = Executors.newCachedThreadPool();
+    this.uploadExecutorService = Executors.newCachedThreadPool();
+    // Single-thread executor for COPY: limits to 1 concurrent COPY per task to avoid
+    // connection explosion, while keeping the main thread free to continue reading data.
+    this.copyExecutorService = Executors.newSingleThreadExecutor();
+    this.uploadCompletionService = new ExecutorCompletionService<>(uploadExecutorService);
     this.deleteStageFile = deleteStageFile;
-    this.uploadFutures = new ArrayList<>();
-    this.uploadedFileNames = Collections.synchronizedList(new ArrayList<>());
+    this.pendingUploads = 0;
+    this.readyForCopyFileNames = new ArrayList<>();
+    this.copyFutures = new ArrayList<>();
+    this.allUploadedFileNames = new ArrayList<>();
     this.maxUploadRetries = maxUploadRetries;
     this.maxCopyRetries = maxCopyRetries;
     this.emptyFieldAsNull = emptyFieldAsNull;
@@ -319,23 +336,65 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
 
     UploadTask uploadTask =
         new UploadTask(file, batchRows, stageIdentifier, snowflakeStageFileName, maxUploadRetries);
-    uploadFutures.add(executorService.submit(uploadTask));
-    uploadedFileNames.add(snowflakeStageFileName + ".csv.gz");
+    uploadCompletionService.submit(uploadTask);
+    pendingUploads++;
 
     fileCount++;
     totalRows += batchRows;
     batchRows = 0;
     batchWeight = 0;
 
+    drainCompletedUploads();
+    checkCompletedCopies();
+    submitBatchCopyIfReady();
+
     openNewFile();
   }
 
+  private void drainCompletedUploads() throws SQLException {
+    Future<String> completed;
+    while ((completed = uploadCompletionService.poll()) != null) {
+      readyForCopyFileNames.add(getOrUnwrap(completed));
+      pendingUploads--;
+    }
+  }
+
+  private void checkCompletedCopies() throws SQLException {
+    Iterator<Future<Void>> it = copyFutures.iterator();
+    while (it.hasNext()) {
+      Future<Void> future = it.next();
+      if (future.isDone()) {
+        getOrUnwrap(future);
+        it.remove();
+      }
+    }
+  }
+
+  private void submitBatchCopyIfReady() {
+    while (readyForCopyFileNames.size() >= BATCH_COPY_CHUNK_SIZE) {
+      List<String> batch = new ArrayList<>(readyForCopyFileNames.subList(0, BATCH_COPY_CHUNK_SIZE));
+      readyForCopyFileNames.subList(0, BATCH_COPY_CHUNK_SIZE).clear();
+
+      allUploadedFileNames.addAll(batch);
+
+      copyFutures.add(
+          copyExecutorService.submit(
+              () -> {
+                runBatchCopyWithRetry(batch);
+                return null;
+              }));
+    }
+  }
+
   public void close() throws IOException, SQLException {
-    executorService.shutdownNow();
+    uploadExecutorService.shutdownNow();
+    copyExecutorService.shutdownNow();
 
     try {
-      executorService.awaitTermination(60, TimeUnit.SECONDS);
+      uploadExecutorService.awaitTermination(60, TimeUnit.SECONDS);
+      copyExecutorService.awaitTermination(60, TimeUnit.SECONDS);
     } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
     }
 
     closeCurrentFile().delete();
@@ -347,57 +406,75 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
 
   @Override
   public void finish() throws IOException, SQLException {
-    // Wait for all uploads to complete
-    for (Future<Void> uploadFuture : uploadFutures) {
-      try {
-        uploadFuture.get();
-      } catch (InterruptedException e) {
-        throw new RuntimeException(e);
-      } catch (ExecutionException e) {
-        if (e.getCause() instanceof SQLException) {
-          throw (SQLException) e.getCause();
-        }
-        throw new RuntimeException(e);
-      }
-    }
-
-    if (uploadedFileNames.isEmpty()) {
-      return;
-    }
-
-    // Run batch COPY in chunks of MAX_FILES_PER_COPY
     try {
-      for (int i = 0; i < uploadedFileNames.size(); i += MAX_FILES_PER_COPY) {
-        List<String> chunk =
-            uploadedFileNames.subList(
-                i, Math.min(i + MAX_FILES_PER_COPY, uploadedFileNames.size()));
-        runBatchCopyWithRetry(chunk);
+      while (pendingUploads > 0) {
+        try {
+          readyForCopyFileNames.add(getOrUnwrap(uploadCompletionService.take()));
+        } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
+          throw new RuntimeException(e);
+        }
+        pendingUploads--;
       }
 
-      logger.info("Loaded {} files.", fileCount);
+      // Submit batch COPY for any full chunks among remaining completed uploads
+      submitBatchCopyIfReady();
+
+      // Run final batch COPY for remaining files (below threshold) synchronously
+      if (!readyForCopyFileNames.isEmpty()) {
+        allUploadedFileNames.addAll(readyForCopyFileNames);
+        runBatchCopyWithRetry(readyForCopyFileNames);
+      }
+
+      for (Future<Void> future : copyFutures) {
+        getOrUnwrap(future);
+      }
+      copyFutures.clear();
+
+      if (!allUploadedFileNames.isEmpty()) {
+        logger.info("Loaded {} files.", fileCount);
+      }
     } finally {
       // Delete stage files if configured — clean up even on partial failure
-      // runDeleteStageFile appends ".csv.gz" internally, so strip it from uploadedFileNames
-      if (deleteStageFile) {
-        for (String fileName : uploadedFileNames) {
-          String nameWithoutExtension = fileName.replaceFirst("\\.csv\\.gz$", "");
-          try {
-            // Use a fresh connection per retry — the existing connection may be broken
-            // after a JDBC communication error, so reusing it would fail again.
-            retryWithBackoff(
-                MAX_DELETE_RETRIES,
-                "Delete stage file " + fileName,
-                () -> {
-                  try (SnowflakeOutputConnection con =
-                      (SnowflakeOutputConnection) connector.connect(true)) {
-                    con.runDeleteStageFile(stageIdentifier, nameWithoutExtension);
-                  }
-                  return null;
-                });
-          } catch (SQLException e) {
-            logger.warn("Failed to delete stage file {}: {}", fileName, e.getMessage());
-          }
-        }
+      if (deleteStageFile && !allUploadedFileNames.isEmpty()) {
+        deleteStageFiles(allUploadedFileNames);
+      }
+    }
+  }
+
+  private <T> T getOrUnwrap(Future<T> future) throws SQLException {
+    try {
+      return future.get();
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new RuntimeException(e);
+    } catch (ExecutionException e) {
+      if (e.getCause() instanceof SQLException) {
+        throw (SQLException) e.getCause();
+      }
+      throw new RuntimeException(e);
+    }
+  }
+
+  private void deleteStageFiles(List<String> fileNames) {
+    // runDeleteStageFile appends ".csv.gz" internally, so strip it from file names
+    for (String fileName : fileNames) {
+      String nameWithoutExtension = fileName.replaceFirst("\\.csv\\.gz$", "");
+      try {
+        // Use a fresh connection per retry — the existing connection may be broken
+        // after a JDBC communication error, so reusing it would fail again.
+        retryWithBackoff(
+            MAX_DELETE_RETRIES,
+            "Delete stage file " + fileName,
+            () -> {
+              try (SnowflakeOutputConnection con =
+                  (SnowflakeOutputConnection) connector.connect(true)) {
+                con.runDeleteStageFile(stageIdentifier, nameWithoutExtension);
+              }
+              return null;
+            });
+      } catch (SQLException e) {
+        logger.warn("Failed to delete stage file {}: {}", fileName, e.getMessage());
       }
     }
   }
@@ -495,7 +572,11 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
     }
   }
 
-  private class UploadTask implements Callable<Void> {
+  /**
+   * Upload task that returns the staged file name (with .csv.gz extension) on completion. Used with
+   * ExecutorCompletionService to allow batch COPY to be triggered by upload completion order.
+   */
+  private class UploadTask implements Callable<String> {
     private final File file;
     private final int batchRows;
     private final String snowflakeStageFileName;
@@ -515,7 +596,7 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
       this.maxUploadRetries = maxUploadRetries;
     }
 
-    public Void call() throws SQLException {
+    public String call() throws SQLException {
       try {
         long startTime = System.currentTimeMillis();
         retryWithBackoff(
@@ -544,7 +625,7 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
         file.delete();
       }
 
-      return null;
+      return snowflakeStageFileName + ".csv.gz";
     }
   }
 }

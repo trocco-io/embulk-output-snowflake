@@ -99,6 +99,10 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
     @ConfigDefault("\"INFO\"")
     public String getJdbcTracing();
 
+    @Config("token")
+    @ConfigDefault("\"\"")
+    public String getToken();
+
     public void setCopyIntoTableColumnNames(String[] columnNames);
 
     public String[] getCopyIntoTableColumnNames();
@@ -189,6 +193,9 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
         // wrap it with ConfigException, which is unchecked.
         throw new ConfigException(e);
       }
+    } else if (!t.getToken().isEmpty()) {
+      props.setProperty("authenticator", "oauth");
+      props.setProperty("token", t.getToken());
     }
 
     props.setProperty("warehouse", t.getWarehouse());
@@ -350,6 +357,8 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
       } else if (key.equals("proxyPassword")) {
         maskedProps.setProperty(key, "***");
       } else if (key.equals("privateKey")) {
+        maskedProps.setProperty(key, "***");
+      } else if (key.equals("token")) {
         maskedProps.setProperty(key, "***");
       } else {
         maskedProps.setProperty(key, props.getProperty(key));

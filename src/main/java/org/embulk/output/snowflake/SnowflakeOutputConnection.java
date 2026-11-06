@@ -5,7 +5,6 @@ import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.List;
-import net.snowflake.client.jdbc.SnowflakeConnection;
 import org.embulk.output.jdbc.JdbcColumn;
 import org.embulk.output.jdbc.JdbcOutputConnection;
 import org.embulk.output.jdbc.JdbcSchema;
@@ -36,14 +35,14 @@ public class SnowflakeOutputConnection extends JdbcOutputConnection {
   public void runUploadFile(
       StageIdentifier stageIdentifier, String filename, FileInputStream fileInputStream)
       throws SQLException {
-    connection
-        .unwrap(SnowflakeConnection.class)
-        .uploadStream(
-            stageIdentifier.getStageName(),
-            stageIdentifier.getDestPrefix().orElse("/"),
-            fileInputStream,
-            filename + ".csv.gz",
-            false);
+    // Snowflake JDBC の 3.x / 4.x の両方で動かすため、SnowflakeConnection を直接は参照しない
+    SnowflakeStreamUploader.upload(
+        connection,
+        stageIdentifier.getStageName(),
+        stageIdentifier.getDestPrefix().orElse("/"),
+        fileInputStream,
+        filename + ".csv.gz",
+        false);
   }
 
   public void runDeleteStageFile(StageIdentifier stageIdentifier, String filename)

@@ -15,15 +15,17 @@ public class SnowflakeUtils {
     return new String(text);
   }
 
-  // SnowflakeSQLException は JDBC ドライバの 3.x と 4.x でパッケージが異なり、型では受けられない。
+  // SnowflakeSQLException is in a different package between JDBC driver 3.x and 4.x, so it can't be
+  // caught by type.
   private static final String LEGACY_SNOWFLAKE_SQL_EXCEPTION =
       "net.snowflake.client.jdbc.SnowflakeSQLException";
   private static final String API_SNOWFLAKE_SQL_EXCEPTION =
       "net.snowflake.client.api.exception.SnowflakeSQLException";
 
   /**
-   * 例外が SnowflakeSQLException（またはそのサブクラス）かどうかを、3.x / 4.x のどちらのドライバでも判定する。 Snowflake 以外の
-   * SQLException を誤って対象にしないよう、クラス名で継承関係をたどる。
+   * Returns whether the throwable is a SnowflakeSQLException (or a subclass) of either driver
+   * generation, 3.x or 4.x. It walks the class hierarchy by name so that other SQLExceptions are
+   * not matched by mistake.
    */
   public static boolean isSnowflakeSQLException(Throwable t) {
     for (Class<?> c = t.getClass(); c != null; c = c.getSuperclass()) {

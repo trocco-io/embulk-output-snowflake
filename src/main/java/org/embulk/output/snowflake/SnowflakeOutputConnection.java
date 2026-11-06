@@ -35,7 +35,7 @@ public class SnowflakeOutputConnection extends JdbcOutputConnection {
   public void runUploadFile(
       StageIdentifier stageIdentifier, String filename, FileInputStream fileInputStream)
       throws SQLException {
-    // Snowflake JDBC の 3.x / 4.x の両方で動かすため、SnowflakeConnection を直接は参照しない
+    // Don't reference SnowflakeConnection directly, so that both Snowflake JDBC 3.x and 4.x work
     SnowflakeStreamUploader.upload(
         connection,
         stageIdentifier.getStageName(),

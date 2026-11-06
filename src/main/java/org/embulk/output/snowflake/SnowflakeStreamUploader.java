@@ -7,18 +7,20 @@ import java.sql.Connection;
 import java.sql.SQLException;
 
 /**
- * Snowflake JDBC ドライバの 3.x / 4.x の両方で、ステージへのストリームアップロードを行う。
+ * Uploads a stream to a stage with either Snowflake JDBC driver 3.x or 4.x.
  *
- * <p>4.x では公開クラスが {@code net.snowflake.client.api.*} へ移動し、{@code uploadStream} のシグネチャも変わった。 接続情報ごとに
- * 3.x と 4.x のドライバが混在するため、コンパイル時にはどちらのクラスにも依存せず、 実行時にロードできている方のクラスをリフレクションで使う。
+ * <p>In 4.x the public classes moved to {@code net.snowflake.client.api.*} and the signature of
+ * {@code uploadStream} changed. The driver version is chosen per connection (3.x and 4.x are used
+ * at the same time), so this class depends on neither generation at compile time. It uses whichever
+ * {@code SnowflakeConnection} is loadable at runtime, via reflection.
  *
- * <p>引数の対応（4.x の公開メソッドは内部で 3.x と同じ実装に委譲している）:
+ * <p>Argument mapping (the public 4.x method delegates to the same internal implementation as 3.x):
  *
  * <ul>
  *   <li>3.x: {@code uploadStream(stageName, destPrefix, inputStream, destFileName, compressData)}
  *   <li>4.x: {@code uploadStream(stageName, destFileName, inputStream,
- *       UploadStreamConfig(destPrefix, compressData))}。{@code compressData} の既定値は {@code true}
- *       なので、必ず明示的に渡す
+ *       UploadStreamConfig(destPrefix, compressData))}. {@code compressData} defaults to {@code
+ *       true} in 4.x, so it is always passed explicitly.
  * </ul>
  */
 final class SnowflakeStreamUploader {
@@ -64,7 +66,7 @@ final class SnowflakeStreamUploader {
             compressData);
       }
     } catch (InvocationTargetException e) {
-      // リフレクション越しでも、ドライバが投げた例外は元の型のまま伝える
+      // Rethrow what the driver threw with its original type, even through reflection
       Throwable cause = e.getCause();
       if (cause instanceof SQLException) {
         throw (SQLException) cause;

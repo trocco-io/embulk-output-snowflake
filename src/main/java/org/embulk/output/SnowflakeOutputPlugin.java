@@ -7,7 +7,6 @@ import java.sql.SQLException;
 import java.sql.Types;
 import java.util.*;
 import java.util.function.BiFunction;
-import net.snowflake.client.jdbc.SnowflakeSQLException;
 import net.snowflake.client.jdbc.internal.org.bouncycastle.operator.OperatorCreationException;
 import net.snowflake.client.jdbc.internal.org.bouncycastle.pkcs.PKCSException;
 import org.embulk.config.ConfigDiff;
@@ -19,6 +18,7 @@ import org.embulk.output.snowflake.PrivateKeyReader;
 import org.embulk.output.snowflake.SnowflakeCopyBatchInsert;
 import org.embulk.output.snowflake.SnowflakeOutputConnection;
 import org.embulk.output.snowflake.SnowflakeOutputConnector;
+import org.embulk.output.snowflake.SnowflakeUtils;
 import org.embulk.output.snowflake.StageIdentifier;
 import org.embulk.output.snowflake.StageIdentifierHolder;
 import org.embulk.spi.Column;
@@ -257,7 +257,13 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
       throws SQLException {
     try {
       snowflakeCon.runDropStage(stageIdentifier);
-    } catch (SnowflakeSQLException ex) {
+    } catch (SQLException ex) {
+      // INFO: SnowflakeSQLException is in a different package between JDBC driver 3.x and 4.x,
+      //       so it can't be caught by type. Only Snowflake's exceptions are handled here.
+      if (!SnowflakeUtils.isSnowflakeSQLException(ex)) {
+        throw ex;
+      }
+
       // INFO: Don't handle only SnowflakeReauthenticationRequest here
       //       because SnowflakeSQLException with following error codes may be thrown in some cases.
 

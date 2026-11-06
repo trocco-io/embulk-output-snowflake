@@ -17,9 +17,8 @@ import net.snowflake.client.jdbc.SnowflakeConnection;
 import org.junit.Test;
 
 /**
- * Tests the 3.x path only, because the 3.x driver is the one on the test classpath. The 4.x path
- * needs the 4.x jar and is not covered here. Do not add stubs of the 4.x classes to src/test: they
- * would make every test in this module take the 4.x path.
+ * Tests the 3.x path only, because the 3.x driver is the one on the test classpath. The real 4.x
+ * API is not on the test classpath, so the 4.x path is not covered by these tests.
  */
 public class TestSnowflakeStreamUploader {
   private static class Call {
@@ -50,6 +49,12 @@ public class TestSnowflakeStreamUploader {
                 throw toThrow;
               }
               return null;
+            case "toString":
+              return "fake-connection";
+            case "hashCode":
+              return 1;
+            case "equals":
+              return proxy == args[0];
             default:
               throw new UnsupportedOperationException(method.getName());
           }
@@ -129,10 +134,18 @@ public class TestSnowflakeStreamUploader {
                 TestSnowflakeStreamUploader.class.getClassLoader(),
                 new Class<?>[] {Connection.class},
                 (proxy, method, args) -> {
-                  if (method.getName().equals("isWrapperFor")) {
-                    return false;
+                  switch (method.getName()) {
+                    case "isWrapperFor":
+                      return false;
+                    case "toString":
+                      return "fake-connection";
+                    case "hashCode":
+                      return 1;
+                    case "equals":
+                      return proxy == args[0];
+                    default:
+                      throw new UnsupportedOperationException(method.getName());
                   }
-                  throw new UnsupportedOperationException(method.getName());
                 });
 
     try {

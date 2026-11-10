@@ -31,6 +31,7 @@ Snowflake output plugin for Embulk loads records to Snowflake.
 - **max_upload_retries**: maximum number of retries for file upload to Snowflake (integer, default: 3).
 - **max_copy_retries**: maximum number of retries for COPY operations in Snowflake (integer, default: 3). Retries occur when transient errors such as communication failures happen during the COPY process.
 - **jdbc_tracing**: JDBC driver logging level. This controls the verbosity of Snowflake JDBC driver logs. Valid values are: OFF, SEVERE, WARNING, INFO, CONFIG, FINE, FINER, FINEST, ALL (string, default: "INFO").
+- **driver_path**: path to a Snowflake JDBC driver jar (string, default: the driver bundled in the gem). Read [JDBC driver](#jdbc-driver) before relying on it: the bundled driver is found first.
 - **mode**: "insert", "insert_direct", "truncate_insert", "replace" or "merge". See below. (string, required)
 - **merge_keys**: key column names for merging records in merge mode (string array, required in merge mode if table doesn't have primary key)
 - **merge_rule**: list of column assignments for updating existing records used in merge mode, for example `"foo" = T."foo" + S."foo"` (`T` means target table and `S` means source table). (string array, default: always overwrites with new values)
@@ -67,6 +68,14 @@ Snowflake output plugin for Embulk loads records to Snowflake.
   * Behavior: This mode writes rows to some intermediate tables first. If all those tasks run correctly, runs MERGE INTO ... WHEN MATCHED THEN UPDATE ...  WHEN NOT MATCHED THEN INSERT ... query. Namely, if merge keys of a record in the intermediate tables already exist in the target table, the target record is updated by the intermediate record, otherwise the intermediate record is inserted. If the target table doesn't exist, it is created automatically.
   * Transactional: Yes.
   * Resumable: No.
+
+## JDBC driver
+
+The gem bundles Snowflake JDBC driver 3.13.26. The plugin works with both the 3.x and the 4.x line of the driver: for uploads it uses the API of the driver behind the connection that is actually opened (in 4.x the public classes moved to `net.snowflake.client.api.*`).
+
+**`driver_path` does not override the bundled driver.** The jar given by `driver_path` is appended to the end of the plugin's class path (this is how embulk-output-jdbc loads it), and the bundled `snowflake-jdbc-3.13.26.jar` in the gem's `classpath/` directory is found first. So with the bundled jar in place, the bundled 3.13.26 is the driver that is used, whatever `driver_path` says. This applies to any version, not only 4.x.
+
+To use another driver version, such as 4.x, remove `snowflake-jdbc-3.13.26.jar` from the `classpath/` directory of the installed gem and give the new jar in `driver_path`. The log line `Using JDBC Driver x.y.z` shows which version is actually in use, so check it after changing the driver. This was tested with 4.4.1.
 
 ## Build
 

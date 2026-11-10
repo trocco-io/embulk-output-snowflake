@@ -5,6 +5,8 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 /**
  * Uploads a stream to a stage with either Snowflake JDBC driver 3.x or 4.x.
@@ -13,6 +15,11 @@ import java.sql.SQLException;
  * {@code uploadStream} changed. The driver version is chosen per connection (3.x and 4.x are used
  * at the same time), so this class depends on neither generation at compile time. It uses, via
  * reflection, the {@code SnowflakeConnection} that the live connection actually implements.
+ *
+ * <p>This class only adapts to the driver that was actually loaded. Which driver is loaded is
+ * decided by the class loader, not here: the jar given by {@code driver_path} is appended to the
+ * end of the plugin's class path, so a driver jar bundled in the plugin's own class path is found
+ * first (see "JDBC driver" in the README).
  *
  * <p>Argument mapping (the public 4.x method delegates to an internal method that takes the same
  * five parameters as the 3.x one; for the stage names and prefixes this plugin uses the behavior is
@@ -34,7 +41,33 @@ final class SnowflakeStreamUploader {
   private static final String API_UPLOAD_CONFIG =
       "net.snowflake.client.api.connection.UploadStreamConfig";
 
+  /** How to call {@code uploadStream} on one generation of the driver. */
+  private interface Uploader {
+    void upload(
+        Connection connection,
+        String stageName,
+        String destPrefix,
+        InputStream inputStream,
+        String destFileName,
+        boolean compressData)
+        throws SQLException, ReflectiveOperationException;
+  }
+
+  // Which generation a connection class belongs to never changes, so it is resolved once per class.
+  private static final ConcurrentMap<Class<?>, Uploader> UPLOADERS = new ConcurrentHashMap<>();
+
   private SnowflakeStreamUploader() {}
+
+  /**
+   * Resolves how to upload with the driver behind the connection, and fails right away if it is not
+   * supported, so that a job does not read and write all its records first and only then fail at
+   * the first upload.
+   *
+   * @throws IllegalStateException if the driver is neither a supported 3.x nor 4.x driver
+   */
+  static void prepare(Connection connection) throws SQLException {
+    uploaderFor(connection);
+  }
 
   static void upload(
       Connection connection,
@@ -44,43 +77,9 @@ final class SnowflakeStreamUploader {
       String destFileName,
       boolean compressData)
       throws SQLException {
-    ClassLoader loader = SnowflakeStreamUploader.class.getClassLoader();
+    Uploader uploader = uploaderFor(connection);
     try {
-      // Choose by what the live connection implements, not only by which classes are loadable: the
-      // class loader may see both generations at once (for example, a 3.x driver jar bundled with
-      // the plugin next to a 4.x jar given by driver_path).
-      Class<?> apiConnection = implementedBy(connection, API_CONNECTION, loader);
-      Class<?> legacyConnection =
-          apiConnection != null ? null : implementedBy(connection, LEGACY_CONNECTION, loader);
-      if (apiConnection != null) {
-        uploadWithApi(
-            connection,
-            apiConnection,
-            loader,
-            stageName,
-            destPrefix,
-            inputStream,
-            destFileName,
-            compressData);
-      } else if (legacyConnection != null) {
-        uploadWithLegacy(
-            connection,
-            legacyConnection,
-            stageName,
-            destPrefix,
-            inputStream,
-            destFileName,
-            compressData);
-      } else {
-        throw new IllegalStateException(
-            "Unsupported Snowflake JDBC driver: "
-                + connection.getClass().getName()
-                + " implements neither "
-                + API_CONNECTION
-                + " (4.x) nor "
-                + LEGACY_CONNECTION
-                + " (3.x)");
-      }
+      uploader.upload(connection, stageName, destPrefix, inputStream, destFileName, compressData);
     } catch (InvocationTargetException e) {
       // Rethrow what the driver threw with its original type, even through reflection
       Throwable cause = e.getCause();
@@ -96,29 +95,85 @@ final class SnowflakeStreamUploader {
       throw new IllegalStateException(cause);
     } catch (ReflectiveOperationException e) {
       throw new IllegalStateException(
-          "Unsupported Snowflake JDBC driver: the expected uploadStream API was not found on "
+          "Unsupported Snowflake JDBC driver: failed to call uploadStream on "
               + connection.getClass().getName(),
           e);
     }
   }
 
-  /** Returns the interface if the class is loadable and the connection implements it. */
-  private static Class<?> implementedBy(Connection connection, String name, ClassLoader loader)
+  private static Uploader uploaderFor(Connection connection) throws SQLException {
+    Class<?> connectionClass = connection.getClass();
+    Uploader uploader = UPLOADERS.get(connectionClass);
+    if (uploader == null) {
+      uploader = resolve(connection);
+      Uploader existing = UPLOADERS.putIfAbsent(connectionClass, uploader);
+      if (existing != null) {
+        uploader = existing;
+      }
+    }
+    return uploader;
+  }
+
+  private static Uploader resolve(Connection connection) throws SQLException {
+    // Look the interfaces up where the driver was loaded first. The plugin's class loader is only
+    // the fallback, because it is not necessarily the one that loaded the driver.
+    ClassLoader connectionLoader = connection.getClass().getClassLoader();
+    ClassLoader pluginLoader = SnowflakeStreamUploader.class.getClassLoader();
+    try {
+      // Choose by what the live connection implements, not only by which classes are loadable: the
+      // class loader may see both generations at once even though the connection belongs to one.
+      Class<?> apiConnection =
+          implementedBy(connection, API_CONNECTION, connectionLoader, pluginLoader);
+      if (apiConnection != null) {
+        return apiUploader(apiConnection, pluginLoader);
+      }
+      Class<?> legacyConnection =
+          implementedBy(connection, LEGACY_CONNECTION, connectionLoader, pluginLoader);
+      if (legacyConnection != null) {
+        return legacyUploader(legacyConnection);
+      }
+    } catch (ReflectiveOperationException e) {
+      throw new IllegalStateException(
+          "Unsupported Snowflake JDBC driver: the expected uploadStream API was not found on "
+              + connection.getClass().getName(),
+          e);
+    }
+    throw new IllegalStateException(
+        "Unsupported Snowflake JDBC driver: "
+            + connection.getClass().getName()
+            + " implements neither "
+            + API_CONNECTION
+            + " (4.x) nor "
+            + LEGACY_CONNECTION
+            + " (3.x)");
+  }
+
+  /** Returns the interface if it is loadable and the connection implements it. */
+  private static Class<?> implementedBy(
+      Connection connection, String name, ClassLoader first, ClassLoader second)
       throws SQLException {
-    Class<?> iface = findClass(name, loader);
+    Class<?> iface = findClass(name, first);
+    if (iface == null && second != first) {
+      iface = findClass(name, second);
+    }
     return iface != null && connection.isWrapperFor(iface) ? iface : null;
   }
 
-  private static void uploadWithLegacy(
-      Connection connection,
-      Class<?> legacyConnection,
-      String stageName,
-      String destPrefix,
-      InputStream inputStream,
-      String destFileName,
-      boolean compressData)
-      throws SQLException, ReflectiveOperationException {
-    Object snowflakeConnection = connection.unwrap(legacyConnection);
+  private static Class<?> findClass(String name, ClassLoader loader) {
+    if (loader == null) {
+      return null;
+    }
+    try {
+      return Class.forName(name, false, loader);
+    } catch (ClassNotFoundException | LinkageError e) {
+      // LinkageError (e.g. NoClassDefFoundError) means the class was found but cannot be linked,
+      // for example because a type it refers to is missing. It must not stop the other generation
+      // from being tried.
+      return null;
+    }
+  }
+
+  private static Uploader legacyUploader(Class<?> legacyConnection) throws NoSuchMethodException {
     Method uploadStream =
         legacyConnection.getMethod(
             "uploadStream",
@@ -127,42 +182,38 @@ final class SnowflakeStreamUploader {
             InputStream.class,
             String.class,
             boolean.class);
-    uploadStream.invoke(
-        snowflakeConnection, stageName, destPrefix, inputStream, destFileName, compressData);
+    return (connection, stageName, destPrefix, inputStream, destFileName, compressData) ->
+        uploadStream.invoke(
+            connection.unwrap(legacyConnection),
+            stageName,
+            destPrefix,
+            inputStream,
+            destFileName,
+            compressData);
   }
 
-  private static void uploadWithApi(
-      Connection connection,
-      Class<?> apiConnection,
-      ClassLoader loader,
-      String stageName,
-      String destPrefix,
-      InputStream inputStream,
-      String destFileName,
-      boolean compressData)
-      throws SQLException, ReflectiveOperationException {
+  private static Uploader apiUploader(Class<?> apiConnection, ClassLoader fallbackLoader)
+      throws ReflectiveOperationException {
+    // UploadStreamConfig is in the same jar as the interface, so load it from the same place
+    ClassLoader loader =
+        apiConnection.getClassLoader() != null ? apiConnection.getClassLoader() : fallbackLoader;
     Class<?> uploadConfig = Class.forName(API_UPLOAD_CONFIG, false, loader);
     Method builderFactory = uploadConfig.getMethod("builder");
-    Object builder = builderFactory.invoke(null);
     // Use the declared (public) return type rather than the runtime class of the instance
     Class<?> builderClass = builderFactory.getReturnType();
-    builder = builderClass.getMethod("setDestPrefix", String.class).invoke(builder, destPrefix);
-    builder =
-        builderClass.getMethod("setCompressData", boolean.class).invoke(builder, compressData);
-    Object config = builderClass.getMethod("build").invoke(builder);
-
-    Object snowflakeConnection = connection.unwrap(apiConnection);
+    Method setDestPrefix = builderClass.getMethod("setDestPrefix", String.class);
+    Method setCompressData = builderClass.getMethod("setCompressData", boolean.class);
+    Method build = builderClass.getMethod("build");
     Method uploadStream =
         apiConnection.getMethod(
             "uploadStream", String.class, String.class, InputStream.class, uploadConfig);
-    uploadStream.invoke(snowflakeConnection, stageName, destFileName, inputStream, config);
-  }
-
-  private static Class<?> findClass(String name, ClassLoader loader) {
-    try {
-      return Class.forName(name, false, loader);
-    } catch (ClassNotFoundException e) {
-      return null;
-    }
+    return (connection, stageName, destPrefix, inputStream, destFileName, compressData) -> {
+      Object builder = builderFactory.invoke(null);
+      builder = setDestPrefix.invoke(builder, destPrefix);
+      builder = setCompressData.invoke(builder, compressData);
+      Object config = build.invoke(builder);
+      uploadStream.invoke(
+          connection.unwrap(apiConnection), stageName, destFileName, inputStream, config);
+    };
   }
 }

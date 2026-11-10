@@ -239,7 +239,11 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
         runDropStageWithRecovery(snowflakeCon, stageIdentifier, task);
       }
     } catch (Exception e) {
-      if (t.getDeleteStage() && t.getDeleteStageOnError()) {
+      // snowflakeCon is null when connecting itself failed (for example with an unsupported
+      // driver).
+      // There is no stage to drop then, and dropping it would hide the original exception with a
+      // NullPointerException.
+      if (snowflakeCon != null && t.getDeleteStage() && t.getDeleteStageOnError()) {
         try {
           runDropStageWithRecovery(snowflakeCon, stageIdentifier, task);
         } catch (SQLException ex) {

@@ -25,6 +25,8 @@ public class SnowflakeOutputConnector extends AbstractJdbcOutputConnector {
   protected JdbcOutputConnection connect() throws SQLException {
     Connection c = DriverManager.getConnection(url, properties);
     try {
+      // Fail here, when the connection is opened, if the driver is not supported for uploads
+      SnowflakeStreamUploader.prepare(c);
       SnowflakeOutputConnection con = new SnowflakeOutputConnection(c);
       c = null;
       return con;

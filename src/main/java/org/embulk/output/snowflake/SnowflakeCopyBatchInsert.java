@@ -603,14 +603,16 @@ public class SnowflakeCopyBatchInsert implements BatchInsert {
             maxUploadRetries,
             "Upload " + snowflakeStageFileName,
             () -> {
+              // The stream is closed here, whether or not the driver closes it, and before the
+              // connection (resources are closed in the reverse order).
               try (SnowflakeOutputConnection con =
-                  (SnowflakeOutputConnection) connector.connect(true)) {
+                      (SnowflakeOutputConnection) connector.connect(true);
+                  FileInputStream fileInputStream = new FileInputStream(file)) {
                 logger.info(
                     "Uploading file id {} to Snowflake ({} bytes {} rows)",
                     snowflakeStageFileName,
                     String.format("%,d", file.length()),
                     String.format("%,d", batchRows));
-                FileInputStream fileInputStream = new FileInputStream(file);
                 con.runUploadFile(stageIdentifier, snowflakeStageFileName, fileInputStream);
               }
               return null;

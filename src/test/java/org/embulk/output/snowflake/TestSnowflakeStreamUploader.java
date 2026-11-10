@@ -10,6 +10,7 @@ import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Proxy;
+import java.security.CodeSource;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.ArrayList;
@@ -205,10 +206,25 @@ public class TestSnowflakeStreamUploader {
   // Selection and class loading
 
   @Test
+  public void theApiClassesOfTheseTestsAreStubsAndNotARealDriver() throws Exception {
+    // net.snowflake.client.api.* in these tests are stubs (src/test/java/net/snowflake/client/api).
+    // If a real 4.x jar got onto the test class path, the same-named classes would clash, and the
+    // tests could pass against the stub signatures while the real API differs. Fail loudly then.
+    CodeSource source = Class.forName(API_CONNECTION).getProtectionDomain().getCodeSource();
+    String location = source == null ? "unknown" : source.getLocation().toString();
+    assertFalse(
+        API_CONNECTION
+            + " must come from the test stubs, but was loaded from "
+            + location
+            + ". Do not put a real 4.x driver jar on the test class path.",
+        location.endsWith(".jar"));
+  }
+
+  @Test
   public void uploadFallsBackToLegacyWhenTheApiClassFailsToLink() throws Exception {
     // A class loader on which looking up the 4.x interface fails the way a class that is found but
     // cannot be linked does (NoClassDefFoundError, a LinkageError). The connection is created in
-    // this class loader, so it is the first one the uploader asks.
+    // this class loader, and that is the class loader the uploader asks.
     ClassLoader failingLoader =
         new ClassLoader(TestSnowflakeStreamUploader.class.getClassLoader()) {
           @Override

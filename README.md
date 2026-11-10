@@ -75,7 +75,7 @@ The gem bundles Snowflake JDBC driver 3.13.26. The plugin works with both the 3.
 
 **`driver_path` does not override the bundled driver.** The jar given by `driver_path` is appended to the end of the plugin's class path (this is how embulk-output-jdbc loads it), and the bundled `snowflake-jdbc-3.13.26.jar` in the gem's `classpath/` directory is found first. So with the bundled jar in place, the bundled 3.13.26 is the driver that is used, whatever `driver_path` says. This applies to any version, not only 4.x.
 
-To use another driver version, such as 4.x, remove `snowflake-jdbc-3.13.26.jar` from the `classpath/` directory of the installed gem and give the new jar in `driver_path`. The log line `Using JDBC Driver x.y.z` shows which version is actually in use, so check it after changing the driver. This was tested with 4.4.1.
+To use another driver version, such as 4.x, remove `snowflake-jdbc-3.13.26.jar` from the `classpath/` directory of the installed gem and give the new jar in `driver_path`. Reinstalling or upgrading the gem brings the bundled jar back, and `driver_path` is then ignored again without any error, so the jar has to be removed again each time. The log line `Using JDBC Driver x.y.z` shows which version is actually in use, so check it after changing the driver. This was tested with 4.4.1.
 
 ## Build
 

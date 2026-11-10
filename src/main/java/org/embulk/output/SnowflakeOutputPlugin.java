@@ -235,25 +235,47 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
       snowflakeCon = (SnowflakeOutputConnection) getConnector(task, true).connect(true);
       snowflakeCon.runCreateStage(stageIdentifier);
       configDiff = super.transaction(config, schema, taskCount, control);
-      if (t.getDeleteStage()) {
-        runDropStageWithRecovery(snowflakeCon, stageIdentifier, task);
-      }
     } catch (Exception e) {
       // snowflakeCon is null when connecting itself failed (for example with an unsupported
-      // driver).
-      // There is no stage to drop then, and dropping it would hide the original exception with a
-      // NullPointerException.
+      // driver). There is no stage to drop then, and dropping it would hide the original exception
+      // with a NullPointerException.
       if (snowflakeCon != null && t.getDeleteStage() && t.getDeleteStageOnError()) {
         try {
           runDropStageWithRecovery(snowflakeCon, stageIdentifier, task);
-        } catch (SQLException ex) {
-          throw new RuntimeException(ex);
+        } catch (Exception ex) {
+          // Keep the exception that made the job fail. The failure of the cleanup is attached to it
+          // instead of replacing it.
+          e.addSuppressed(ex);
         }
       }
+      closeQuietly(snowflakeCon);
       throw new RuntimeException(e);
     }
 
+    // Dropping the stage after a successful job is not part of the error handling above, so a
+    // failure here does not drop the stage a second time.
+    try {
+      if (t.getDeleteStage()) {
+        runDropStageWithRecovery(snowflakeCon, stageIdentifier, task);
+      }
+    } catch (SQLException e) {
+      throw new RuntimeException(e);
+    } finally {
+      closeQuietly(snowflakeCon);
+    }
+
     return configDiff;
+  }
+
+  private void closeQuietly(SnowflakeOutputConnection connection) {
+    if (connection == null) {
+      return;
+    }
+    try {
+      connection.close();
+    } catch (Exception e) {
+      logger.warn("Failed to close the connection to Snowflake", e);
+    }
   }
 
   private void runDropStageWithRecovery(
@@ -282,8 +304,10 @@ public class SnowflakeOutputPlugin extends AbstractJdbcOutputPlugin {
         case ID_TOKEN_INVALID_LOGIN_REQUEST_GS_CODE:
           // INFO: If runCreateStage consumed a lot of time, authentication might be expired.
           //       In this case, retry to drop stage.
-          snowflakeCon = (SnowflakeOutputConnection) getConnector(task, true).connect(true);
-          snowflakeCon.runDropStage(stageIdentifier);
+          try (SnowflakeOutputConnection reconnected =
+              (SnowflakeOutputConnection) getConnector(task, true).connect(true)) {
+            reconnected.runDropStage(stageIdentifier);
+          }
           break;
         default:
           throw ex;
